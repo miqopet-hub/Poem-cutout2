@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Poem Cutout</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+      font-family: serif;
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #info {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      color: white;
+      font-family: monospace;
+      font-size: 13px;
+      opacity: 0.8;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">Allow webcam access</div>
+
+  <video id="video" autoplay playsinline style="display:none;"></video>
+  <canvas id="canvas"></canvas>
+
+  <!-- MediaPipe Selfie Segmentation -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
+
+  <script>
+    const poem = `
+THE WALL DOES NOT END
+IT ONLY MOVES
+
+WORDS ARE BRICKS
+SENTENCES ARE BORDERS
+
+THE BODY IS THE ONLY TRUTH
+THAT DOES NOT OBEY
+
+YOU ENTER
+AND LANGUAGE BREAKS
+
+YOU LEAVE
+AND IT REBUILDS
+    `.trim();
+
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    window.addEventListener("resize", () => {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    });
+
+    // Offscreen canvas for text
+    const textCanvas = document.createElement("canvas");
+    const textCtx = textCanvas.getContext("2d");
+
+    // Offscreen canvas for mask
+    const maskCanvas = document.createElement("canvas");
+    const maskCtx = maskCanvas.getContext("2d");
+
+    async function setupWebcam() {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1280, height: 720 }
+      });
+      video.srcObject = stream;
+      return new Promise(resolve => {
+        video.onloadedmetadata = () => resolve();
+      });
+    }
+
+    function drawPoemText() {
+      textCanvas.width = width;
+      textCanvas.height = height;
+
+      textCtx.clearRect(0, 0, width, height);
+
+      textCtx.fillStyle = "white";
+      textCtx.textAlign = "left";
+      textCtx.textBaseline = "top";
+
+      let fontSize = Math.max(18, width * 0.03);
+      textCtx.font = `${fontSize}px serif`;
+
+      const padding = 60;
+      const maxWidth = width - padding * 2;
+
+      const words = poem.split(/\s+/);
+      let line = "";
+      let y = padding;
+
+      for (let i = 0; i < words.length; i++) {
+        const testLine = line + words[i] + " ";
+        const metrics = textCtx.measureText(testLine);
+
+        if (metrics.width > maxWidth && i > 0) {
+          textCtx.fillText(line, padding, y);
+          line = words[i] + " ";
+          y += fontSize * 1.3;
+        } else {
+          line = testLine;
+        }
+      }
+
+      textCtx.fillText(line, padding, y);
+    }
+
+    function applyMaskToText(maskImage) {
+      maskCanvas.width = width;
+      maskCanvas.height = height;
+
+      maskCtx.clearRect(0, 0, width, height);
+
+      // draw segmentation mask stretched to screen
+      maskCtx.drawImage(maskImage, 0, 0, width, height);
+
+      // read mask pixels
+      const maskData = maskCtx.getImageData(0, 0, width, height);
+      const textData = textCtx.getImageData(0, 0, width, height);
+
+      // If mask pixel is white (person), make text transparent there
+      for (let i = 0; i < maskData.data.length; i += 4) {
+        const r = maskData.data[i]; // mask grayscale
+
+        // person area is usually white-ish
+        if (r > 128) {
+          textData.data[i + 3] = 0; // alpha = 0 (cutout hole)
+        }
+      }
+
+      // draw result on main canvas
+      ctx.clearRect(0, 0, width, height);
+      ctx.putImageData(textData, 0, 0);
+    }
+
+    async function main() {
+      await setupWebcam();
+
+      const segmentation = new SelfieSegmentation({
+        locateFile: (file) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+      });
+
+      segmentation.setOptions({
+        modelSelection: 1 // 0 = general, 1 = landscape (often better)
+      });
+
+      segmentation.onResults(results => {
+        // results.segmentationMask is a canvas-like object
+        drawPoemText();
+        applyMaskToText(results.segmentationMask);
+      });
+
+      async function renderLoop() {
+        await segmentation.send({ image: video });
+        requestAnimationFrame(renderLoop);
+      }
+
+      renderLoop();
+    }
+
+    main().catch(err => {
+      document.getElementById("info").innerText = "Webcam error: " + err;
+      console.error(err);
+    });
+  </script>
+</body>
+</html>
