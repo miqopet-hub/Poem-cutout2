@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CarScale — Vehicle Size Comparison</title>
+<style>
+:root{--bg:#f3f3ef;--ink:#171717;--muted:#777;--line:#d9d9d3;--card:#fff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{padding:24px 32px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.logo{font-size:24px;font-weight:800;letter-spacing:-.05em}.logo span{font-weight:400;color:#888}
+main{max-width:1400px;margin:auto;padding:30px}
+.controls{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;margin-bottom:14px}
+select,button{font:inherit;border:1px solid #ccc;background:white;border-radius:10px;padding:12px 14px}
+button{cursor:pointer}.modes{display:flex;gap:4px;background:#e5e5e0;padding:4px;border-radius:12px}.modes button{border:0;background:transparent}.modes .active{background:#171717;color:#fff}
+.stage{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.stagehead{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:20px}
+.legend{font-size:13px;color:#666}.legend span{margin-left:14px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+.canvas{height:460px;position:relative;overflow:hidden;background:linear-gradient(to bottom,transparent 72%,#ededeb 72%,#ededeb calc(72% + 1px),transparent calc(72% + 1px))}
+.ground{position:absolute;left:4%;right:4%;bottom:28%;border-top:1px solid #aaa}
+.carwrap{position:absolute;bottom:28%;transform-origin:left bottom;transition:left .35s,width .35s,opacity .35s;pointer-events:none}
+.carwrap svg{display:block;width:100%;height:auto}
+.carlabel{position:absolute;top:calc(100% + 14px);left:0;white-space:nowrap;font-weight:700}
+.carlabel small{display:block;color:#888;font-weight:400;margin-top:2px}
+.stats{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line)}
+.stat{padding:20px}.stat+.stat{border-left:1px solid var(--line)}
+.name{font-size:20px;font-weight:750}.year{color:#777;margin-top:2px}.nums{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}
+.num b{display:block;font-size:17px}.num small{color:#888}
+.note{font-size:12px;color:#888;margin-top:12px}
+@media(max-width:800px){main{padding:16px}.controls{grid-template-columns:1fr}.canvas{height:350px}.stats{grid-template-columns:1fr}.stat+.stat{border-left:0;border-top:1px solid var(--line)}.nums{grid-template-columns:1fr 1fr}header{padding:18px}}
+</style>
+</head>
+<body>
+<header><div class="logo">CAR<span>scale</span></div><div style="font-size:13px;color:#888">physical size, not horsepower</div></header>
+<main>
+<div class="controls">
+<select id="carA"></select><select id="carB"></select>
+<div class="modes">
+<button class="active" data-mode="side">Side by side</button>
+<button data-mode="overlay">Overlay</button>
+<button data-mode="front">Width</button>
+</div>
+</div>
+<section class="stage">
+<div class="stagehead"><strong id="modeTitle">Same scale</strong><div class="legend"><span><i class="dot" style="background:#171717"></i><span id="legendA"></span></span><span><i class="dot" style="background:#888"></i><span id="legendB"></span></span></div></div>
+<div class="canvas" id="canvas">
+<div class="ground"></div>
+<div class="carwrap" id="wrapA"><div id="svgA"></div><div class="carlabel" id="labelA"></div></div>
+<div class="carwrap" id="wrapB"><div id="svgB"></div><div class="carlabel" id="labelB"></div></div>
+</div>
+<div class="stats">
+<div class="stat"><div class="name" id="nameA"></div><div class="year" id="yearA"></div><div class="nums" id="numsA"></div></div>
+<div class="stat"><div class="name" id="nameB"></div><div class="year" id="yearB"></div><div class="nums" id="numsB"></div></div>
+</div>
+</section>
+<div class="note">Prototype data and silhouettes are illustrative. The renderer uses the stored physical dimensions to keep comparisons proportional.</div>
+</main>
+<script>
+const cars={
+mini:{name:"Mini Cooper S",year:"2008 · R56",length:3714,width:1683,height:1407,wheelbase:2467,
+svg:`<svg viewBox="0 0 3714 1407" xmlns="http://www.w3.org/2000/svg"><path d="M205 1085L320 920 625 860 1010 810 1250 520Q1390 300 1710 250L2180 260Q2460 280 2630 500L2820 720 3280 820 3490 980 3540 1085Z" fill="#171717"/><circle cx="890" cy="1085" r="230" fill="#fff"/><circle cx="890" cy="1085" r="155" fill="#171717"/><circle cx="2880" cy="1085" r="230" fill="#fff"/><circle cx="2880" cy="1085" r="155" fill="#171717"/><path d="M1270 520Q1430 335 1710 300L2150 310Q2400 330 2570 520Z" fill="#f3f3ef"/></svg>`},
+corsa:{name:"Opel Corsa",year:"1997 · Corsa B",length:3739,width:1610,height:1420,wheelbase:2443,
+svg:`<svg viewBox="0 0 3739 1420" xmlns="http://www.w3.org/2000/svg"><path d="M180 1090L300 910 650 845 1080 790 1320 500Q1470 280 1770 245L2210 265Q2510 300 2710 520L2920 745 3370 830 3560 980 3590 1090Z" fill="#888"/><circle cx="900" cy="1090" r="235" fill="#fff"/><circle cx="900" cy="1090" r="158" fill="#888"/><circle cx="2920" cy="1090" r="235" fill="#fff"/><circle cx="2920" cy="1090" r="158" fill="#888"/><path d="M1330 500Q1500 350 1770 300L2180 315Q2450 345 2640 520Z" fill="#f3f3ef"/></svg>`}
+};
+const A=document.querySelector("#carA"),B=document.querySelector("#carB");
+for(const [id,c] of Object.entries(cars)){A.add(new Option(`${c.name} — ${c.year}`,id));B.add(new Option(`${c.name} — ${c.year}`,id))}
+A.value="mini";B.value="corsa";let mode="side";
+function numbers(c){return `<div class="num"><b>${c.length} mm</b><small>length</small></div><div class="num"><b>${c.width} mm</b><small>width</small></div><div class="num"><b>${c.height} mm</b><small>height</small></div><div class="num"><b>${c.wheelbase} mm</b><small>wheelbase</small></div>`}
+function render(){
+ const a=cars[A.value],b=cars[B.value],canvas=document.querySelector("#canvas");
+ document.querySelector("#svgA").innerHTML=a.svg;document.querySelector("#svgB").innerHTML=b.svg;
+ document.querySelector("#nameA").textContent=a.name;document.querySelector("#yearA").textContent=a.year;
+ document.querySelector("#nameB").textContent=b.name;document.querySelector("#yearB").textContent=b.year;
+ document.querySelector("#legendA").textContent=a.name;document.querySelector("#legendB").textContent=b.name;
+ document.querySelector("#numsA").innerHTML=numbers(a);document.querySelector("#numsB").innerHTML=numbers(b);
+ document.querySelector("#labelA").innerHTML=`${a.name}<small>${a.length} × ${a.width} × ${a.height} mm</small>`;
+ document.querySelector("#labelB").innerHTML=`${b.name}<small>${b.length} × ${b.width} × ${b.height} mm</small>`;
+ const wa=document.querySelector("#wrapA"),wb=document.querySelector("#wrapB");
+ const scale=Math.min(canvas.clientWidth*.42/Math.max(a.length,b.length),.12);
+ wa.style.width=(a.length*scale)+"px";wb.style.width=(b.length*scale)+"px";wa.style.opacity=wb.style.opacity="1";
+ if(mode==="side"){wa.style.left="6%";wb.style.left=`${6+(a.length*scale/canvas.clientWidth*100)+5}%`;document.querySelector("#modeTitle").textContent="Same scale";}
+ else if(mode==="overlay"){wa.style.left="25%";wb.style.left="25%";wa.style.opacity=".58";wb.style.opacity=".42";document.querySelector("#modeTitle").textContent="Overlay — same scale";}
+ else{const widthScale=Math.min(canvas.clientWidth*.23/Math.max(a.width,b.width),.25);wa.style.width=(a.width*widthScale)+"px";wb.style.width=(b.width*widthScale)+"px";wa.style.left="31%";wb.style.left="56%";document.querySelector("#modeTitle").textContent="Width comparison";}
+}
+document.querySelectorAll("[data-mode]").forEach(x=>x.onclick=()=>{document.querySelectorAll("[data-mode]").forEach(y=>y.classList.remove("active"));x.classList.add("active");mode=x.dataset.mode;render()});
+A.onchange=B.onchange=render;window.onresize=render;render();
+</script>
+</body>
+</html>
