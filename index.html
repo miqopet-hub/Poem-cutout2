@@ -15,19 +15,18 @@ select,button{font:inherit;border:1px solid #ccc;background:white;border-radius:
 button{cursor:pointer}.modes{display:flex;gap:4px;background:#e5e5e0;padding:4px;border-radius:12px}.modes button{border:0;background:transparent}.modes .active{background:#171717;color:#fff}
 .stage{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden}
 .stagehead{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:20px}
-.legend{font-size:13px;color:#666}.legend span{margin-left:14px}
-.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+.modehint{font-size:13px;color:#777}
 .canvas{height:460px;position:relative;overflow:hidden;background:linear-gradient(to bottom,transparent 72%,#ededeb 72%,#ededeb calc(72% + 1px),transparent calc(72% + 1px))}
 .ground{position:absolute;left:4%;right:4%;bottom:28%;border-top:1px solid #aaa}
 .carwrap{position:absolute;bottom:28%;transform-origin:left bottom;transition:left .35s,width .35s,opacity .35s;pointer-events:none}
-.carwrap svg{display:block;width:100%;height:auto}
+.carwrap svg{display:block;width:100%;height:auto;overflow:visible}
 .carlabel{position:absolute;top:calc(100% + 14px);left:0;white-space:nowrap;font-weight:700}
 .carlabel small{display:block;color:#888;font-weight:400;margin-top:2px}
 .stats{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line)}
 .stat{padding:20px}.stat+.stat{border-left:1px solid var(--line)}
 .name{font-size:20px;font-weight:750}.year{color:#777;margin-top:2px}.nums{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}
 .num b{display:block;font-size:17px}.num small{color:#888}
-.note{font-size:12px;color:#888;margin-top:12px}
+.note{font-size:12px;color:#888;margin-top:12px}.overlayLabels{position:absolute;left:0;right:0;bottom:5%;display:none;text-align:center;line-height:1.55;font-size:15px;font-weight:700}.overlayLabels div{display:block}.overlayLabels span{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}
 @media(max-width:800px){main{padding:16px}.controls{grid-template-columns:1fr}.canvas{height:350px}.stats{grid-template-columns:1fr}.stat+.stat{border-left:0;border-top:1px solid var(--line)}.nums{grid-template-columns:1fr 1fr}header{padding:18px}}
 </style>
 </head>
@@ -43,11 +42,11 @@ button{cursor:pointer}.modes{display:flex;gap:4px;background:#e5e5e0;padding:4px
 </div>
 </div>
 <section class="stage">
-<div class="stagehead"><strong id="modeTitle">Same scale</strong><div class="legend"><span><i class="dot" style="background:#171717"></i><span id="legendA"></span></span><span><i class="dot" style="background:#888"></i><span id="legendB"></span></span></div></div>
+<div class="stagehead"><strong id="modeTitle">Same scale</strong><div class="modehint" id="modeHint">Side profiles use actual length scale</div></div>
 <div class="canvas" id="canvas">
 <div class="ground"></div>
 <div class="carwrap" id="wrapA"><div id="svgA"></div><div class="carlabel" id="labelA"></div></div>
-<div class="carwrap" id="wrapB"><div id="svgB"></div><div class="carlabel" id="labelB"></div></div>
+<div class="carwrap" id="wrapB"><div id="svgB"></div><div class="carlabel" id="labelB"></div></div><div class="overlayLabels" id="overlayLabels"></div>
 </div>
 <div class="stats">
 <div class="stat"><div class="name" id="nameA"></div><div class="year" id="yearA"></div><div class="nums" id="numsA"></div></div>
@@ -58,30 +57,42 @@ button{cursor:pointer}.modes{display:flex;gap:4px;background:#e5e5e0;padding:4px
 </main>
 <script>
 const cars={
-mini:{name:"Mini Cooper S",year:"2008 · R56",length:3714,width:1683,height:1407,wheelbase:2467,
-svg:`<svg viewBox="0 0 3714 1407" xmlns="http://www.w3.org/2000/svg"><path d="M205 1085L320 920 625 860 1010 810 1250 520Q1390 300 1710 250L2180 260Q2460 280 2630 500L2820 720 3280 820 3490 980 3540 1085Z" fill="#171717"/><circle cx="890" cy="1085" r="230" fill="#fff"/><circle cx="890" cy="1085" r="155" fill="#171717"/><circle cx="2880" cy="1085" r="230" fill="#fff"/><circle cx="2880" cy="1085" r="155" fill="#171717"/><path d="M1270 520Q1430 335 1710 300L2150 310Q2400 330 2570 520Z" fill="#f3f3ef"/></svg>`},
-corsa:{name:"Opel Corsa",year:"1997 · Corsa B",length:3739,width:1610,height:1420,wheelbase:2443,
-svg:`<svg viewBox="0 0 3739 1420" xmlns="http://www.w3.org/2000/svg"><path d="M180 1090L300 910 650 845 1080 790 1320 500Q1470 280 1770 245L2210 265Q2510 300 2710 520L2920 745 3370 830 3560 980 3590 1090Z" fill="#888"/><circle cx="900" cy="1090" r="235" fill="#fff"/><circle cx="900" cy="1090" r="158" fill="#888"/><circle cx="2920" cy="1090" r="235" fill="#fff"/><circle cx="2920" cy="1090" r="158" fill="#888"/><path d="M1330 500Q1500 350 1770 300L2180 315Q2450 345 2640 520Z" fill="#f3f3ef"/></svg>`}
+mini:{name:"Mini Cooper S",year:"2008 · R56",length:3714,width:1683,height:1407,wheelbase:2467,color:"#246BCE",
+side:`<svg viewBox="0 0 3714 1407" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="24" stroke-linejoin="round" stroke-linecap="round"><path d="M180 1080L270 945Q330 870 455 850L1040 790L1280 505Q1450 300 1740 270L2170 280Q2460 305 2620 510L2815 720L3280 815Q3440 845 3510 950L3560 1080H180Z"/><path d="M1280 505Q1460 350 1730 320L2145 330Q2400 345 2575 515"/><path d="M1395 500L1450 745M2225 340L2245 760M2620 510L2700 735"/><circle cx="870" cy="1080" r="205"/><circle cx="870" cy="1080" r="125"/><circle cx="2860" cy="1080" r="205"/><circle cx="2860" cy="1080" r="125"/><path d="M530 865Q670 790 1040 790M3050 790Q3260 805 3410 900"/></svg>`,
+front:`<svg viewBox="0 0 1683 1407" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="24" stroke-linejoin="round" stroke-linecap="round"><path d="M185 1230L235 580Q260 360 450 275Q620 205 841 205Q1063 205 1233 275Q1423 360 1448 580L1498 1230Z"/><path d="M450 275Q520 470 530 760M1233 275Q1163 470 1153 760"/><path d="M530 760Q841 700 1153 760L1195 1070Q841 1120 487 1070Z"/><circle cx="390" cy="1110" r="115"/><circle cx="1293" cy="1110" r="115"/><path d="M300 850Q841 780 1383 850M400 500Q841 430 1283 500"/></svg>`},
+corsa:{name:"Opel Corsa",year:"1997 · Corsa B",length:3739,width:1610,height:1420,wheelbase:2443,color:"#E06A2C",
+side:`<svg viewBox="0 0 3739 1420" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="24" stroke-linejoin="round" stroke-linecap="round"><path d="M175 1085L270 935Q335 855 470 835L1070 780L1320 500Q1490 300 1780 260L2200 275Q2500 305 2700 525L2915 745L3370 830Q3515 855 3580 960L3600 1085H175Z"/><path d="M1320 500Q1500 350 1780 315L2185 325Q2460 340 2655 525"/><path d="M1450 495L1510 740M2250 340L2265 750M2700 525L2785 760"/><circle cx="900" cy="1085" r="210"/><circle cx="900" cy="1085" r="128"/><circle cx="2920" cy="1085" r="210"/><circle cx="2920" cy="1085" r="128"/><path d="M500 850Q700 790 1070 780M3120 785Q3330 810 3470 905"/></svg>`,
+front:`<svg viewBox="0 0 1610 1420" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="24" stroke-linejoin="round" stroke-linecap="round"><path d="M205 1230L250 600Q275 390 450 300Q610 220 805 220Q1000 220 1160 300Q1335 390 1360 600L1405 1230Z"/><path d="M450 300Q520 480 530 760M1160 300Q1090 480 1080 760"/><path d="M530 760Q805 700 1080 760L1120 1070Q805 1120 490 1070Z"/><circle cx="390" cy="1110" r="112"/><circle cx="1220" cy="1110" r="112"/><path d="M300 850Q805 790 1310 850M395 500Q805 435 1215 500"/></svg>`}
 };
 const A=document.querySelector("#carA"),B=document.querySelector("#carB");
 for(const [id,c] of Object.entries(cars)){A.add(new Option(`${c.name} — ${c.year}`,id));B.add(new Option(`${c.name} — ${c.year}`,id))}
 A.value="mini";B.value="corsa";let mode="side";
 function numbers(c){return `<div class="num"><b>${c.length} mm</b><small>length</small></div><div class="num"><b>${c.width} mm</b><small>width</small></div><div class="num"><b>${c.height} mm</b><small>height</small></div><div class="num"><b>${c.wheelbase} mm</b><small>wheelbase</small></div>`}
+function paint(id,c){const el=document.querySelector(id);el.innerHTML=c[mode==="front"?"front":"side"];const s=el.firstElementChild;s.style.color=c.color;s.style.stroke=c.color}
 function render(){
- const a=cars[A.value],b=cars[B.value],canvas=document.querySelector("#canvas");
- document.querySelector("#svgA").innerHTML=a.svg;document.querySelector("#svgB").innerHTML=b.svg;
- document.querySelector("#nameA").textContent=a.name;document.querySelector("#yearA").textContent=a.year;
- document.querySelector("#nameB").textContent=b.name;document.querySelector("#yearB").textContent=b.year;
- document.querySelector("#legendA").textContent=a.name;document.querySelector("#legendB").textContent=b.name;
+ const a=cars[A.value],b=cars[B.value],canvas=document.querySelector("#canvas"),wa=document.querySelector("#wrapA"),wb=document.querySelector("#wrapB"),labels=document.querySelector("#overlayLabels");
+ document.querySelector("#nameA").textContent=a.name;document.querySelector("#yearA").textContent=a.year;document.querySelector("#nameB").textContent=b.name;document.querySelector("#yearB").textContent=b.year;
  document.querySelector("#numsA").innerHTML=numbers(a);document.querySelector("#numsB").innerHTML=numbers(b);
  document.querySelector("#labelA").innerHTML=`${a.name}<small>${a.length} × ${a.width} × ${a.height} mm</small>`;
  document.querySelector("#labelB").innerHTML=`${b.name}<small>${b.length} × ${b.width} × ${b.height} mm</small>`;
- const wa=document.querySelector("#wrapA"),wb=document.querySelector("#wrapB");
- const scale=Math.min(canvas.clientWidth*.42/Math.max(a.length,b.length),.12);
- wa.style.width=(a.length*scale)+"px";wb.style.width=(b.length*scale)+"px";wa.style.opacity=wb.style.opacity="1";
- if(mode==="side"){wa.style.left="6%";wb.style.left=`${6+(a.length*scale/canvas.clientWidth*100)+5}%`;document.querySelector("#modeTitle").textContent="Same scale";}
- else if(mode==="overlay"){wa.style.left="25%";wb.style.left="25%";wa.style.opacity=".58";wb.style.opacity=".42";document.querySelector("#modeTitle").textContent="Overlay — same scale";}
- else{const widthScale=Math.min(canvas.clientWidth*.23/Math.max(a.width,b.width),.25);wa.style.width=(a.width*widthScale)+"px";wb.style.width=(b.width*widthScale)+"px";wa.style.left="31%";wb.style.left="56%";document.querySelector("#modeTitle").textContent="Width comparison";}
+ wa.style.color=a.color;wb.style.color=b.color;wa.style.opacity=wb.style.opacity="1";
+ if(mode==="side"){
+  paint("#svgA",a);paint("#svgB",b);const scale=Math.min(canvas.clientWidth*.42/Math.max(a.length,b.length),.12);
+  wa.style.width=(a.length*scale)+"px";wb.style.width=(b.length*scale)+"px";wa.style.left="6%";wb.style.left=`${6+(a.length*scale/canvas.clientWidth*100)+5}%`;
+  document.querySelector("#labelA").style.display=document.querySelector("#labelB").style.display="block";labels.style.display="none";
+  document.querySelector("#modeTitle").textContent="Same scale";document.querySelector("#modeHint").textContent="Side profiles use actual length scale";
+ }else if(mode==="overlay"){
+  paint("#svgA",a);paint("#svgB",b);const scale=Math.min(canvas.clientWidth*.52/Math.max(a.length,b.length),.14);
+  wa.style.width=(a.length*scale)+"px";wb.style.width=(b.length*scale)+"px";wa.style.left="24%";wb.style.left="24%";
+  document.querySelector("#labelA").style.display=document.querySelector("#labelB").style.display="none";
+  labels.innerHTML=`<div style="color:${a.color}"><span style="background:${a.color}"></span>${a.name} — ${a.length} × ${a.width} × ${a.height} mm</div><div style="color:${b.color}"><span style="background:${b.color}"></span>${b.name} — ${b.length} × ${b.width} × ${b.height} mm</div>`;labels.style.display="block";
+  document.querySelector("#modeTitle").textContent="Overlay — outlines only";document.querySelector("#modeHint").textContent="Same physical length scale";
+ }else{
+  paint("#svgA",a);paint("#svgB",b);const scale=Math.min(canvas.clientWidth*.28/Math.max(a.width,b.width),.3);
+  wa.style.width=(a.width*scale)+"px";wb.style.width=(b.width*scale)+"px";wa.style.left="18%";wb.style.left="58%";
+  document.querySelector("#labelA").style.display=document.querySelector("#labelB").style.display="block";labels.style.display="none";
+  document.querySelector("#modeTitle").textContent="Width comparison";document.querySelector("#modeHint").textContent="Front outlines scaled by actual vehicle width";
+ }
 }
 document.querySelectorAll("[data-mode]").forEach(x=>x.onclick=()=>{document.querySelectorAll("[data-mode]").forEach(y=>y.classList.remove("active"));x.classList.add("active");mode=x.dataset.mode;render()});
 A.onchange=B.onchange=render;window.onresize=render;render();
