@@ -323,28 +323,30 @@
     morphShapeState(cx,cy,cs,centerPhase,[dark,main,light,green,gold]);
 
     // Fourfold arms. Only ONE quarter is authored.
-    mirrorQuarter((sx,sy)=>{
+    // Author ONE quarter only. mirrorQuarter reflects the canvas
+    // around the center; do not apply another sx/sy transform here.
+    // The previous version did both, which caused the asymmetric stray
+    // white strokes you noticed.
+    mirrorQuarter(()=>{
       const armPhase=phase*.67 + .13;
-      const qx=cx+sx*r*.40;
-      const qy=cy-sy*r*.39;
+      const qx=cx+r*.40;
+      const qy=cy-r*.39;
 
       stroke(light,Math.max(3,unit*.31));
       ctx.beginPath();
-      ctx.moveTo(cx+sx*r*.17,cy+sy*r*.03);
-      ctx.lineTo(cx+sx*r*.17,cy-sy*r*.25);
-      ctx.lineTo(cx+sx*r*.39,cy-sy*r*.43);
-      ctx.lineTo(cx+sx*r*.58,cy-sy*r*.25);
+      ctx.moveTo(cx+r*.17,cy+r*.03);
+      ctx.lineTo(cx+r*.17,cy-r*.25);
+      ctx.lineTo(cx+r*.39,cy-r*.43);
+      ctx.lineTo(cx+r*.58,cy-r*.25);
       ctx.stroke();
 
-      // The terminal shape physically changes.
       morphShapeState(qx,qy,r*.19,armPhase,[dark,main,light,green,gold]);
 
-      // A small inner hook grows/shrinks rather than switching.
       const hookPhase=(Math.sin(phase*Math.PI*2)+1)/2;
       stroke(light,Math.max(2,unit*.20));
       ctx.beginPath();
-      ctx.moveTo(cx+sx*r*.34,cy-sy*r*.10);
-      ctx.lineTo(cx+sx*r*(.34+.12*hookPhase),cy-sy*r*(.10+.10*hookPhase));
+      ctx.moveTo(cx+r*.34,cy-r*.10);
+      ctx.lineTo(cx+r*(.34+.12*hookPhase),cy-r*(.10+.10*hookPhase));
       ctx.stroke();
     },cx,cy);
 
