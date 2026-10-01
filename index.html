@@ -101,7 +101,7 @@
     W = innerWidth;
     H = innerHeight;
     unit = Math.max(11, Math.min(21, W / 39));
-    sectionH = Math.max(620, Math.min(820, H * 1.05));
+    sectionH = Math.max(440, Math.min(560, H * 0.72));
 
     canvas.width = Math.round(W * DPR);
     canvas.height = Math.round(H * DPR);
@@ -251,119 +251,85 @@
 
   // All shapes have six control points. Duplicate/collinear points
   // allow the silhouette to become a genuine intermediate hexagon.
-  const SHAPES = {
-    triangle: [
-      [0,-1], [0,-1], [.90,.50], [0,.50], [-.90,.50], [0,-1]
-    ],
-    hexagon: [
-      [0,-1], [.86,-.50], [.86,.50], [0,1], [-.86,.50], [-.86,-.50]
-    ],
-    square: [
-      [-.78,-.78], [.78,-.78], [.78,.78], [.78,.78], [-.78,.78], [-.78,.78]
-    ],
-    diamond: [
-      [0,-1], [.72,0], [0,1], [0,1], [-.72,0], [0,-1]
-    ]
-  };
-
-  function drawMorphMotif(x,y,r,fromName,toName,t,fillColor,outlineColor) {
-    const a=SHAPES[fromName], b=SHAPES[toName];
-    morphPolygon(x,y,r,a,b,smooth(t),fillColor,outlineColor,Math.max(1,unit*.09));
+  // Regular polygon morphing. All intermediate silhouettes remain symmetric.
+  function wrapAngle(a){while(a<=-Math.PI)a+=Math.PI*2;while(a>Math.PI)a-=Math.PI*2;return a;}
+  function regularPoint(theta,sides){
+    const alpha=-Math.PI/2, normal=alpha+Math.PI/sides;
+    const delta=wrapAngle(theta-normal);
+    const apothem=Math.cos(Math.PI/sides);
+    const radius=apothem/Math.cos(delta);
+    return [Math.cos(theta)*radius,Math.sin(theta)*radius];
+  }
+  function regularShape(sides,count=24){
+    const p=[]; for(let i=0;i<count;i++){
+      const theta=-Math.PI/2+Math.PI*2*i/count;
+      p.push(regularPoint(theta,sides));
+    } return p;
+  }
+  const SHAPES={triangle:regularShape(3),hexagon:regularShape(6),square:regularShape(4),diamond:regularShape(4)};
+  function drawMorphMotif(x,y,r,fromName,toName,t,fillColor,outlineColor){
+    const a=SHAPES[fromName],b=SHAPES[toName],tt=smooth(t);
+    const p=a.map((q,i)=>[q[0]+(b[i][0]-q[0])*tt,q[1]+(b[i][1]-q[1])*tt]);
+    polygon(p.map(q=>[x+q[0]*r,y+q[1]*r]),fillColor);
+    if(outlineColor){stroke(outlineColor,Math.max(1,unit*.08));ctx.beginPath();
+      ctx.moveTo(x+p[0][0]*r,y+p[0][1]*r);
+      for(let i=1;i<p.length;i++)ctx.lineTo(x+p[i][0]*r,y+p[i][1]*r);
+      ctx.closePath();ctx.stroke();}
+  }
+  function morphShapeState(x,y,r,phase,pal){
+    const states=[['triangle','hexagon'],['hexagon','square'],['square','diamond'],['diamond','triangle']];
+    const q=((phase%1)+1)%1*states.length,i=Math.floor(q)%states.length,t=q-Math.floor(q);
+    const pair=states[i]; drawMorphMotif(x,y,r,pair[0],pair[1],t,pal[4],pal[0]);
   }
 
-  function morphShapeState(x,y,r,phase,pal) {
-    // One complete transformation cycle:
-    // triangle -> hexagon -> square -> diamond -> triangle.
-    const states=[
-      ['triangle','hexagon'],
-      ['hexagon','square'],
-      ['square','diamond'],
-      ['diamond','triangle']
-    ];
-    const total=states.length;
-    const q=((phase%1)+1)%1*total;
-    const i=Math.floor(q)%total;
-    const t=q-Math.floor(q);
-    const pair=states[i];
 
-    drawMorphMotif(x,y,r,pair[0],pair[1],t,pal[4],pal[0]);
+  function designValue(z,offset){
+    const step=1350,k=Math.floor(z/step),t=smooth((z-k*step)/step);
+    return rand(k*37+offset)+(rand((k+1)*37+offset)-rand(k*37+offset))*t;
   }
+  function centralModule(sectionIndex,y0,pal){
+    const cx=W/2,cy=y0+sectionH*.50,z=sectionIndex*sectionH+sectionH*.50;
+    const bodyW=.82+.16*designValue(z,1),bodyH=.58+.18*designValue(z,2);
+    const notch=.12+.13*designValue(z,3),armReach=.46+.18*designValue(z,4);
+    const armRise=.23+.13*designValue(z,5),satellite=.57+.16*designValue(z,6);
+    const satelliteY=.68+.16*designValue(z,7),centerScale=.25+.10*designValue(z,8);
+    const r=Math.min(W*.38,sectionH*.46);
+    const main=pal[1],light=pal[2],green=pal[3],gold=pal[4],dark=pal[0];
+    const morphPhase=z/1500+designValue(z,9)*.9;
 
-  function centralModule(sectionIndex, y0, pal) {
-    const cx=W/2;
-    const cy=y0 + sectionH*.52;
-    const r=Math.min(W*.64,sectionH*.62)*.50;
-    const main=pal[1], light=pal[2], green=pal[3], gold=pal[4], dark=pal[0];
+    fill(main);ctx.fillRect(cx-r*bodyW,cy-r*bodyH,r*bodyW*2,r*bodyH*2);
 
-    // World position controls the morph, so looking backward shows the
-    // exact historical state rather than the current state.
-    const worldCenter=sectionIndex*sectionH + sectionH*.52;
-    const phase=worldCenter/1050;
-
-    // Main field.
-    fill(main);
-    ctx.fillRect(cx-r*.92,cy-r*.72,r*1.84,r*1.44);
-
-    // Exact four-way stepped body.
-    stroke(light,Math.max(3,unit*.38));
-    ctx.beginPath();
-    const outline=[
-      [-.92,-.72],[-.58,-.72],[-.42,-.90],[.42,-.90],[.58,-.72],[.92,-.72],
-      [.92,.72],[.58,.72],[.42,.90],[-.42,.90],[-.58,.72],[-.92,.72]
-    ];
-    outline.forEach((p,i)=>{
-      const x=cx+p[0]*r,y=cy+p[1]*r;
-      if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);
-    });
-    ctx.closePath();ctx.stroke();
-
-    // Center square slowly morphs too.
-    const cs=r*.33;
-    const centerPhase=phase*.82+.17;
-    morphShapeState(cx,cy,cs,centerPhase,[dark,main,light,green,gold]);
-
-    // Fourfold arms. Only ONE quarter is authored.
-    // Author ONE quarter only. mirrorQuarter reflects the canvas
-    // around the center; do not apply another sx/sy transform here.
-    // The previous version did both, which caused the asymmetric stray
-    // white strokes you noticed.
+    stroke(light,Math.max(3,unit*.34));
+    const q=[[-bodyW,-bodyH],[-bodyW+notch,-bodyH],[-bodyW*.48,-bodyH-.16],
+             [-bodyW*.22,-bodyH-.16],[-bodyW*.10,-bodyH],[0,-bodyH]];
     mirrorQuarter(()=>{
-      const armPhase=phase*.67 + .13;
-      const qx=cx+r*.40;
-      const qy=cy-r*.39;
-
-      stroke(light,Math.max(3,unit*.31));
-      ctx.beginPath();
-      ctx.moveTo(cx+r*.17,cy+r*.03);
-      ctx.lineTo(cx+r*.17,cy-r*.25);
-      ctx.lineTo(cx+r*.39,cy-r*.43);
-      ctx.lineTo(cx+r*.58,cy-r*.25);
-      ctx.stroke();
-
-      morphShapeState(qx,qy,r*.19,armPhase,[dark,main,light,green,gold]);
-
-      const hookPhase=(Math.sin(phase*Math.PI*2)+1)/2;
-      stroke(light,Math.max(2,unit*.20));
-      ctx.beginPath();
-      ctx.moveTo(cx+r*.34,cy-r*.10);
-      ctx.lineTo(cx+r*(.34+.12*hookPhase),cy-r*(.10+.10*hookPhase));
-      ctx.stroke();
+      ctx.beginPath();ctx.moveTo(cx+q[0][0]*r,cy+q[0][1]*r);
+      for(let i=1;i<q.length;i++)ctx.lineTo(cx+q[i][0]*r,cy+q[i][1]*r);ctx.stroke();
     },cx,cy);
 
-    // Secondary motifs also morph continuously.
-    const sideR=r*.13;
-    morphShapeState(cx-r*.67,cy,sideR,phase*.91,[dark,main,light,green,gold]);
-    morphShapeState(cx+r*.67,cy,sideR,phase*.91,[dark,main,light,green,gold]);
-    morphShapeState(cx,cy-r*.67,sideR,phase*.91+.25,[dark,main,light,green,gold]);
-    morphShapeState(cx,cy+r*.67,sideR,phase*.91+.25,[dark,main,light,green,gold]);
+    morphShapeState(cx,cy,r*centerScale,morphPhase,[dark,main,light,green,gold]);
 
-    const cd=r*.17;
-    morphShapeState(cx-r*.72,cy-r*.82,cd,phase*.73+.10,[dark,main,light,green,gold]);
-    morphShapeState(cx+r*.72,cy-r*.82,cd,phase*.73+.10,[dark,main,light,green,gold]);
-    morphShapeState(cx-r*.72,cy+r*.82,cd,phase*.73+.10,[dark,main,light,green,gold]);
-    morphShapeState(cx+r*.72,cy+r*.82,cd,phase*.73+.10,[dark,main,light,green,gold]);
+    mirrorQuarter(()=>{
+      stroke(light,Math.max(3,unit*.29));ctx.beginPath();
+      ctx.moveTo(cx+r*.10,cy+r*.02);ctx.lineTo(cx+r*.10,cy-r*armRise);
+      ctx.lineTo(cx+r*armReach,cy-r*(armRise+.18));ctx.stroke();
+      morphShapeState(cx+r*armReach,cy-r*(armRise+.18),
+        r*(.13+.07*designValue(z,10)),morphPhase*.78+.21,[dark,main,light,green,gold]);
+    },cx,cy);
+
+    const sideR=r*(.09+.05*designValue(z,11)),sideX=r*satellite,sideY=r*satelliteY;
+    morphShapeState(cx-sideX,cy,sideR,morphPhase*.71+.1,[dark,main,light,green,gold]);
+    morphShapeState(cx+sideX,cy,sideR,morphPhase*.71+.1,[dark,main,light,green,gold]);
+    morphShapeState(cx,cy-sideY,sideR,morphPhase*.71+.26,[dark,main,light,green,gold]);
+    morphShapeState(cx,cy+sideY,sideR,morphPhase*.71+.26,[dark,main,light,green,gold]);
+
+    const cornerX=r*(.62+.12*designValue(z,12)),cornerY=r*(.76+.10*designValue(z,13));
+    const cornerR=r*(.11+.05*designValue(z,14));
+    morphShapeState(cx-cornerX,cy-cornerY,cornerR,morphPhase*.55+.3,[dark,main,light,green,gold]);
+    morphShapeState(cx+cornerX,cy-cornerY,cornerR,morphPhase*.55+.3,[dark,main,light,green,gold]);
+    morphShapeState(cx-cornerX,cy+cornerY,cornerR,morphPhase*.55+.3,[dark,main,light,green,gold]);
+    morphShapeState(cx+cornerX,cy+cornerY,cornerR,morphPhase*.55+.3,[dark,main,light,green,gold]);
   }
-
 
   function border(sectionIndex, pal) {
     const dark=pal[0], red=pal[1], light=pal[2], green=pal[3], gold=pal[4];
