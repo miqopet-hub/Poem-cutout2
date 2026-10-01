@@ -2,96 +2,287 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CarScale — Vehicle Size Comparison</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Carpet Diem</title>
 <style>
-:root{--bg:#f3f3ef;--ink:#171717;--muted:#777;--line:#d9d9d3;--card:#fff}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-header{padding:24px 32px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
-.logo{font-size:24px;font-weight:800;letter-spacing:-.05em}.logo span{font-weight:400;color:#888}
-main{max-width:1400px;margin:auto;padding:30px}
-.controls{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;margin-bottom:14px}
-select,button{font:inherit;border:1px solid #ccc;background:white;border-radius:10px;padding:12px 14px}
-button{cursor:pointer}.modes{display:flex;gap:4px;background:#e5e5e0;padding:4px;border-radius:12px}.modes button{border:0;background:transparent}.modes .active{background:#171717;color:#fff}
-.stage{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden}
-.stagehead{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:20px}
-.modehint{font-size:13px;color:#777}
-.canvas{height:460px;position:relative;overflow:hidden;background:linear-gradient(to bottom,transparent 72%,#ededeb 72%,#ededeb calc(72% + 1px),transparent calc(72% + 1px))}
-.ground{position:absolute;left:4%;right:4%;bottom:28%;border-top:1px solid #aaa}
-.carwrap{position:absolute;bottom:28%;transform-origin:left bottom;transition:left .35s,width .35s,opacity .35s;pointer-events:none}
-.carwrap svg{display:block;width:100%;height:auto;overflow:visible}
-.carlabel{position:absolute;top:calc(100% + 14px);left:0;white-space:nowrap;font-weight:700}
-.carlabel small{display:block;color:#888;font-weight:400;margin-top:2px}
-.stats{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line)}
-.stat{padding:20px}.stat+.stat{border-left:1px solid var(--line)}
-.name{font-size:20px;font-weight:750}.year{color:#777;margin-top:2px}.nums{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}
-.num b{display:block;font-size:17px}.num small{color:#888}
-.note{font-size:12px;color:#888;margin-top:12px}.overlayLabels{position:absolute;left:0;right:0;bottom:5%;display:none;text-align:center;line-height:1.55;font-size:15px;font-weight:700}.overlayLabels div{display:block}.overlayLabels span{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}
-@media(max-width:800px){main{padding:16px}.controls{grid-template-columns:1fr}.canvas{height:350px}.stats{grid-template-columns:1fr}.stat+.stat{border-left:0;border-top:1px solid var(--line)}.nums{grid-template-columns:1fr 1fr}header{padding:18px}}
+  :root{--paper:#e8e0d0;--ink:#17130f}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--paper);color:var(--ink);overflow-x:hidden}
+  body{font-family:Georgia,"Times New Roman",serif}
+  #loom{display:block;width:100%;image-rendering:auto}
+  #name{
+    position:fixed;z-index:5;top:16px;left:18px;
+    font-size:14px;letter-spacing:.02em;mix-blend-mode:multiply;
+    pointer-events:none
+  }
+  #hint{
+    position:fixed;z-index:5;right:18px;bottom:16px;
+    font:11px/1.2 system-ui,sans-serif;opacity:0;
+    transition:opacity .2s;pointer-events:none
+  }
+  body:hover #hint{opacity:.45}
+  @media(max-width:600px){
+    #name{top:12px;left:12px}
+    #hint{right:12px;bottom:12px}
+  }
 </style>
 </head>
 <body>
-<header><div class="logo">CAR<span>scale</span></div><div style="font-size:13px;color:#888">physical size, not horsepower</div></header>
-<main>
-<div class="controls">
-<select id="carA"></select><select id="carB"></select>
-<div class="modes">
-<button class="active" data-mode="side">Side by side</button>
-<button data-mode="overlay">Overlay</button>
-<button data-mode="front">Width</button>
-</div>
-</div>
-<section class="stage">
-<div class="stagehead"><strong id="modeTitle">Same scale</strong><div class="modehint" id="modeHint">Side profiles use actual length scale</div></div>
-<div class="canvas" id="canvas">
-<div class="ground"></div>
-<div class="carwrap" id="wrapA"><div id="svgA"></div><div class="carlabel" id="labelA"></div></div>
-<div class="carwrap" id="wrapB"><div id="svgB"></div><div class="carlabel" id="labelB"></div></div><div class="overlayLabels" id="overlayLabels"></div>
-</div>
-<div class="stats">
-<div class="stat"><div class="name" id="nameA"></div><div class="year" id="yearA"></div><div class="nums" id="numsA"></div></div>
-<div class="stat"><div class="name" id="nameB"></div><div class="year" id="yearB"></div><div class="nums" id="numsB"></div></div>
-</div>
-</section>
-<div class="note">Vehicle geometry is generation/body-style specific. Corsa B profile: Marseille77, Wikimedia Commons, CC BY-SA 3.0. Mini R56 geometry is an original CARscale reconstruction based on the documented R56 generation; it is not copied from a commercial blueprint.</div>
-</main>
+<div id="name">carpet.diem</div>
+<div id="hint">E — export this moment</div>
+<canvas id="loom"></canvas>
+
 <script>
-const cars={
-mini:{name:"Mini Cooper S",year:"2008 · R56 · hatchback",length:3714,width:1683,height:1407,wheelbase:2467,color:"#246BCE",source:"Original SVG reconstruction from documented R56 reference",license:"Original CARscale artwork",side:`<svg viewBox="0 0 3714 1407" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="20" stroke-linejoin="round" stroke-linecap="round"><path d="M92 1086L145 1012Q188 952 268 920L470 885Q618 864 793 842L1088 812L1245 557Q1370 348 1574 282Q1750 225 2046 242L2254 255Q2460 280 2607 429L2795 649Q2865 732 3006 763L3332 836Q3478 868 3554 963L3618 1086Z"/><path d="M1245 557Q1398 335 1605 294Q1802 254 2042 268L2240 280Q2440 304 2585 448"/><path d="M1330 548L1442 548L1510 812M2228 282L2250 812M2587 450L2678 785"/><path d="M470 885Q653 835 1088 812M2795 649Q2898 755 3006 763"/><circle cx="857" cy="1086" r="203"/><circle cx="857" cy="1086" r="126"/><circle cx="2866" cy="1086" r="203"/><circle cx="2866" cy="1086" r="126"/><path d="M308 915Q540 900 785 870M3025 780Q3265 808 3420 905"/></svg>`,front:`<svg viewBox="0 0 1683 1407" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="20" stroke-linejoin="round" stroke-linecap="round"><path d="M185 1230L220 690Q232 462 370 350Q515 230 690 205Q841 185 993 205Q1168 230 1313 350Q1451 462 1463 690L1498 1230Z"/><path d="M370 350Q430 530 445 735M1313 350Q1253 530 1238 735M445 735Q841 690 1238 735L1265 1060Q841 1108 418 1060Z"/><path d="M305 850Q841 780 1378 850M360 535Q841 475 1323 535M540 330Q841 292 1143 330"/><circle cx="390" cy="1112" r="110"/><circle cx="1293" cy="1112" r="110"/></svg>`},
-corsa:{name:"Opel Corsa B",year:"1997 · Corsa B · 4-door hatchback",length:3739,width:1610,height:1420,wheelbase:2443,color:"#E06A2C",source:"Wikimedia Commons — Opel corsa b profile.svg by Marseille77",license:"CC BY-SA 3.0",sourceUrl:"https://commons.wikimedia.org/wiki/File:Opel_corsa_b_profile.svg",side:`<svg viewBox="0 0 3739 1420" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="19" stroke-linejoin="round" stroke-linecap="round"><path d="M105 1090L158 1020Q205 956 292 920L475 885L1005 823L1202 540Q1348 337 1554 280Q1745 227 2030 240L2205 250Q2435 273 2598 438L2795 660Q2875 744 3010 770L3330 838Q3480 870 3565 967L3622 1090Z"/><path d="M1202 540Q1362 345 1562 300Q1750 258 2028 270L2195 280Q2420 300 2578 454"/><path d="M1280 540L1392 540L1458 820M2198 282L2220 815M2580 454L2682 790"/><circle cx="850" cy="1090" r="202"/><circle cx="850" cy="1090" r="124"/><circle cx="2868" cy="1090" r="202"/><circle cx="2868" cy="1090" r="124"/><path d="M300 930Q540 900 780 875M3040 790Q3290 810 3450 910M1010 823L1080 760M2680 790L2790 805"/></svg>`,front:`<svg viewBox="0 0 1610 1420" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="19" stroke-linejoin="round" stroke-linecap="round"><path d="M195 1230L225 675Q238 460 370 350Q515 230 650 210Q805 188 960 210Q1095 230 1240 350Q1372 460 1385 675L1415 1230Z"/><path d="M370 350Q430 525 440 745M1240 350Q1180 525 1170 745M440 745Q805 700 1170 745L1195 1065Q805 1110 415 1065Z"/><path d="M300 850Q805 790 1310 850M350 535Q805 475 1260 535M520 330Q805 295 1090 330"/><circle cx="385" cy="1112" r="108"/><circle cx="1225" cy="1112" r="108"/></svg>`}
-};
-const A=document.querySelector("#carA"),B=document.querySelector("#carB");
-for(const [id,c] of Object.entries(cars)){A.add(new Option(`${c.name} — ${c.year}`,id));B.add(new Option(`${c.name} — ${c.year}`,id))}
-A.value="mini";B.value="corsa";let mode="side";
-function numbers(c){return `<div class="num"><b>${c.length} mm</b><small>length</small></div><div class="num"><b>${c.width} mm</b><small>width</small></div><div class="num"><b>${c.height} mm</b><small>height</small></div><div class="num"><b>${c.wheelbase} mm</b><small>wheelbase</small></div>`}
-function paint(id,c){const el=document.querySelector(id);el.innerHTML=c[mode==="front"?"front":"side"];const s=el.firstElementChild;s.style.color=c.color;s.style.stroke=c.color}
-function render(){
- const a=cars[A.value],b=cars[B.value],canvas=document.querySelector("#canvas"),wa=document.querySelector("#wrapA"),wb=document.querySelector("#wrapB"),labels=document.querySelector("#overlayLabels");
- document.querySelector("#nameA").textContent=a.name;document.querySelector("#yearA").textContent=a.year;document.querySelector("#nameB").textContent=b.name;document.querySelector("#yearB").textContent=b.year;
- document.querySelector("#numsA").innerHTML=numbers(a);document.querySelector("#numsB").innerHTML=numbers(b);
- document.querySelector("#labelA").innerHTML=`${a.name}<small>${a.length} × ${a.width} × ${a.height} mm</small>`;
- document.querySelector("#labelB").innerHTML=`${b.name}<small>${b.length} × ${b.width} × ${b.height} mm</small>`;
- wa.style.color=a.color;wb.style.color=b.color;wa.style.opacity=wb.style.opacity="1";
- if(mode==="side"){
-  paint("#svgA",a);paint("#svgB",b);const scale=Math.min(canvas.clientWidth*.42/Math.max(a.length,b.length),.12);
-  wa.style.width=(a.length*scale)+"px";wb.style.width=(b.length*scale)+"px";wa.style.left="6%";wb.style.left=`${6+(a.length*scale/canvas.clientWidth*100)+5}%`;
-  document.querySelector("#labelA").style.display=document.querySelector("#labelB").style.display="block";labels.style.display="none";
-  document.querySelector("#modeTitle").textContent="Same scale";document.querySelector("#modeHint").textContent="Side profiles use actual length scale";
- }else if(mode==="overlay"){
-  paint("#svgA",a);paint("#svgB",b);const scale=Math.min(canvas.clientWidth*.52/Math.max(a.length,b.length),.14);
-  wa.style.width=(a.length*scale)+"px";wb.style.width=(b.length*scale)+"px";wa.style.left="24%";wb.style.left="24%";
-  document.querySelector("#labelA").style.display=document.querySelector("#labelB").style.display="none";
-  labels.innerHTML=`<div style="color:${a.color}"><span style="background:${a.color}"></span>${a.name} — ${a.length} × ${a.width} × ${a.height} mm</div><div style="color:${b.color}"><span style="background:${b.color}"></span>${b.name} — ${b.length} × ${b.width} × ${b.height} mm</div>`;labels.style.display="block";
-  document.querySelector("#modeTitle").textContent="Overlay — outlines only";document.querySelector("#modeHint").textContent="Same physical length scale";
- }else{
-  paint("#svgA",a);paint("#svgB",b);const scale=Math.min(canvas.clientWidth*.28/Math.max(a.width,b.width),.3);
-  wa.style.width=(a.width*scale)+"px";wb.style.width=(b.width*scale)+"px";wa.style.left="18%";wb.style.left="58%";
-  document.querySelector("#labelA").style.display=document.querySelector("#labelB").style.display="block";labels.style.display="none";
-  document.querySelector("#modeTitle").textContent="Width comparison";document.querySelector("#modeHint").textContent="Front outlines scaled by actual vehicle width";
- }
-}
-document.querySelectorAll("[data-mode]").forEach(x=>x.onclick=()=>{document.querySelectorAll("[data-mode]").forEach(y=>y.classList.remove("active"));x.classList.add("active");mode=x.dataset.mode;render()});
-A.onchange=B.onchange=render;window.onresize=render;render();
+(() => {
+  const canvas = document.getElementById('loom');
+  const ctx = canvas.getContext('2d');
+  const DPR = Math.min(devicePixelRatio || 1, 2);
+
+  // One refresh = one deterministic carpet.
+  const seed = (crypto.getRandomValues(new Uint32Array(1))[0]) >>> 0;
+  let rngState = seed;
+
+  function rnd(){
+    rngState ^= rngState << 13; rngState ^= rngState >>> 17; rngState ^= rngState << 5;
+    return ((rngState >>> 0) / 4294967296);
+  }
+  function pick(a){ return a[Math.floor(rnd()*a.length)] }
+
+  // A restrained palette based on traditional Armenian carpet colors,
+  // deliberately treated as a generative palette rather than a reconstruction.
+  const palettes = [
+    ['#191510','#8d2024','#c58b35','#e0c47b','#f0e4c9'],
+    ['#201b16','#6f2925','#a9472e','#b98943','#ddd0ad'],
+    ['#161816','#315044','#a56c37','#c9aa67','#e8dfc9'],
+    ['#241b19','#713b45','#ad6f45','#d0a15e','#e7d7b6'],
+    ['#171817','#7c2524','#b85d36','#d6ad61','#eee2c8']
+  ];
+  const palette = pick(palettes);
+
+  let W = innerWidth;
+  let unit = Math.max(14, Math.min(25, W / 38));
+  let segmentH = unit * 10;
+  let generated = 0;
+  let targetScroll = 0;
+  let userLookingBack = false;
+  let lastTime = performance.now();
+  let speed = unit * 1.25; // pixels / second
+
+  function resize(){
+    W = innerWidth;
+    unit = Math.max(14, Math.min(25, W / 38));
+    segmentH = unit * 10;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(Math.max(innerHeight, 900) * DPR);
+    canvas.style.height = Math.max(innerHeight, 900) + 'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    draw();
+  }
+  addEventListener('resize', resize);
+
+  // Store the woven history as compact segment seeds rather than pixels.
+  const segments = [];
+  function makeSegment(){
+    const s = {
+      seed: (rngState ^ Math.floor(generated / segmentH)) >>> 0,
+      motif: Math.floor(rnd()*7),
+      density: .72 + rnd()*.45,
+      flip: rnd() > .5,
+      accent: Math.floor(rnd()*palette.length)
+    };
+    segments.push(s);
+    return s;
+  }
+
+  function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(x,y,w,h)}
+  function diamond(cx,cy,r,c,inner=true){
+    ctx.fillStyle=c;
+    ctx.beginPath();
+    ctx.moveTo(cx,cy-r);ctx.lineTo(cx+r,cy);ctx.lineTo(cx,cy+r);ctx.lineTo(cx-r,cy);ctx.closePath();ctx.fill();
+    if(inner){
+      ctx.strokeStyle=palette[0];ctx.lineWidth=Math.max(1,unit*.10);
+      ctx.beginPath();ctx.moveTo(cx,cy-r*.55);ctx.lineTo(cx+r*.55,cy);ctx.lineTo(cx,cy+r*.55);ctx.lineTo(cx-r*.55,cy);ctx.closePath();ctx.stroke();
+    }
+  }
+  function octagon(cx,cy,r,c){
+    ctx.fillStyle=c;ctx.beginPath();
+    for(let i=0;i<8;i++){const a=Math.PI/8+i*Math.PI/4;const x=cx+Math.cos(a)*r,y=cy+Math.sin(a)*r;i?ctx.lineTo(x,y):ctx.moveTo(x,y)}
+    ctx.closePath();ctx.fill();
+    ctx.strokeStyle=palette[0];ctx.lineWidth=Math.max(1,unit*.10);ctx.stroke();
+  }
+  function cross(cx,cy,r,c){
+    ctx.fillStyle=c;
+    const t=r*.36;
+    ctx.fillRect(cx-t,cy-r,t*2,r*2);ctx.fillRect(cx-r,cy-t,r*2,t*2);
+    ctx.strokeStyle=palette[0];ctx.lineWidth=Math.max(1,unit*.10);
+    ctx.strokeRect(cx-t,cy-r,t*2,r*2);ctx.strokeRect(cx-r,cy-t,r*2,t*2);
+  }
+  function hook(cx,cy,r,c,flip){
+    ctx.strokeStyle=c;ctx.lineWidth=r*.28;ctx.lineCap='square';
+    ctx.beginPath();
+    const d=flip?-1:1;
+    ctx.moveTo(cx-r*.8,cy);
+    ctx.lineTo(cx-r*.15,cy);
+    ctx.lineTo(cx-r*.15+d*r*.55,cy-d*r*.55);
+    ctx.lineTo(cx+d*r*.72,cy-d*r*.55);
+    ctx.stroke();
+  }
+
+  function motif(x,y,type,scale,c,flip){
+    const r=scale;
+    if(type===0) diamond(x,y,r,c);
+    if(type===1) octagon(x,y,r,c);
+    if(type===2) cross(x,y,r,c);
+    if(type===3){
+      diamond(x,y,r,c,false);
+      diamond(x,y,r*.48,palette[(palette.indexOf(c)+2)%palette.length],false);
+      ctx.strokeStyle=palette[0];ctx.lineWidth=Math.max(1,unit*.10);
+      ctx.strokeRect(x-r*.5,y-r*.5,r,r);
+    }
+    if(type===4){
+      octagon(x,y,r,c);
+      for(let i=0;i<4;i++) hook(x+(i%2?1:-1)*r*.75,y+(i<2?-1:1)*r*.72,r*.55,palette[(palette.indexOf(c)+1)%palette.length],i%2);
+    }
+    if(type===5){
+      ctx.strokeStyle=c;ctx.lineWidth=r*.22;
+      ctx.beginPath();
+      for(let i=0;i<5;i++){const a=(i/4)*Math.PI*2-Math.PI/2;const px=x+Math.cos(a)*r*.8,py=y+Math.sin(a)*r*.8;i?ctx.lineTo(px,py):ctx.moveTo(px,py)}
+      ctx.stroke();
+      diamond(x,y,r*.28,palette[2],false);
+    }
+    if(type===6){
+      diamond(x,y,r,c);
+      for(let i=0;i<4;i++){
+        const a=i*Math.PI/2+(flip?Math.PI/4:0);
+        hook(x+Math.cos(a)*r*.95,y+Math.sin(a)*r*.95,r*.42,palette[(palette.indexOf(c)+3)%palette.length],i%2);
+      }
+    }
+  }
+
+  function drawSegment(s, y){
+    const cols = Math.max(5,Math.floor(W/(unit*3.2)));
+    const cell = W/cols;
+    // Small edge guard, like the outer border of a woven carpet.
+    rect(0,y,W,segmentH,palette[0]);
+
+    const innerX = unit*1.25;
+    const innerY = unit*1.0;
+    rect(innerX,y+innerY,W-innerX*2,segmentH-innerY*2,palette[4]);
+
+    // Border bands.
+    const bw=unit*.72;
+    rect(innerX,y+innerY,W-innerX*2,bw,palette[2]);
+    rect(innerX,y+segmentH-innerY-bw,W-innerX*2,bw,palette[2]);
+    rect(innerX,y+innerY,bw,segmentH-innerY*2,palette[2]);
+    rect(W-innerX-bw,y+innerY,bw,segmentH-innerY*2,palette[2]);
+
+    // Interlocking border diamonds.
+    const bx=innerX+bw*.5;
+    const by=y+innerY+bw*.5;
+    for(let x=bx;x<W-innerX;x+=unit*2.0) diamond(x,by,unit*.48,palette[1],false);
+    for(let x=bx;x<W-innerX;x+=unit*2.0) diamond(x,y+segmentH-innerY-bw*.5,unit*.48,palette[1],false);
+    for(let yy=by+unit*2;yy<y+segmentH-innerY-bw;yy+=unit*2) diamond(bx,yy,unit*.48,palette[1],false);
+    for(let yy=by+unit*2;yy<y+segmentH-innerY-bw;yy+=unit*2) diamond(W-innerX-bw*.5,yy,unit*.48,palette[1],false);
+
+    const startX=innerX+bw+cell*.5;
+    const startY=y+innerY+bw+cell*.28;
+    const rows=Math.max(1,Math.floor((segmentH-innerY*2-bw*2)/(unit*2.8)));
+    for(let row=0;row<rows;row++){
+      const yy=startY+row*unit*2.8;
+      for(let col=0;col<cols-2;col++){
+        const xx=startX+col*cell;
+        const wave = Math.sin((col+row)*.85 + generated*.002);
+        if(Math.abs(wave)>.98 && rnd()<.4) continue;
+        const localType=(s.motif+row+col+(s.flip?col:0))%7;
+        const cc=palette[1+((col+row+s.accent)%4)];
+        const sc=unit*(.75 + .22*s.density);
+        motif(xx,yy+Math.sin(col*.8+row)*unit*.18,localType,sc,cc,(col+row)%2===0);
+      }
+    }
+  }
+
+  function ensureHistory(){
+    const need = Math.ceil((innerHeight*1.7 + generated + 1000)/segmentH);
+    while(segments.length < need) makeSegment();
+  }
+
+  function draw(){
+    ensureHistory();
+    // The canvas is a moving window over the woven history.
+    const top = Math.max(0, generated - Math.max(innerHeight*1.7,900));
+    ctx.clearRect(0,0,W,Math.max(innerHeight,900));
+    const first=Math.max(0,Math.floor(top/segmentH)-1);
+    const last=Math.min(segments.length,first+Math.ceil(Math.max(innerHeight,900)/segmentH)+3);
+    for(let i=first;i<last;i++){
+      const y=i*segmentH-top;
+      if(y<Math.max(innerHeight,900)+segmentH && y>-segmentH) drawSegment(segments[i],y);
+    }
+  }
+
+  function follow(){
+    // Keep the viewer at the newest woven edge unless they have deliberately
+    // moved into the already-woven history.
+    const max=Math.max(0,document.documentElement.scrollHeight-innerHeight);
+    if(!userLookingBack) scrollTo(0,max);
+  }
+
+  function tick(now){
+    const dt=Math.min(.05,(now-lastTime)/1000); lastTime=now;
+    generated += speed*dt;
+    draw();
+    // Rebuild the document height so the browser has a real history to scroll through.
+    document.body.style.height=Math.max(innerHeight,generated+innerHeight*0.8)+'px';
+    follow();
+    requestAnimationFrame(tick);
+  }
+
+  // Manual scrolling is intentionally limited to the already-woven past.
+  addEventListener('wheel',e=>{
+    if(e.deltaY<0){ userLookingBack=true; }
+    else if(e.deltaY>0){
+      const atBottom=scrollY >= document.documentElement.scrollHeight-innerHeight-3;
+      if(atBottom){e.preventDefault();userLookingBack=false}
+    }
+  },{passive:false});
+
+  addEventListener('scroll',()=>{
+    const max=Math.max(0,document.documentElement.scrollHeight-innerHeight);
+    if(scrollY < max-30) userLookingBack=true;
+    else userLookingBack=false;
+  });
+
+  // Export the exact visible moment as a clean carpet image.
+  function exportMoment(){
+    const out=document.createElement('canvas');
+    const scale=Math.min(2,Math.max(1,devicePixelRatio||1));
+    out.width=Math.round(W*scale);out.height=Math.round(innerHeight*scale);
+    const oc=out.getContext('2d'); oc.setTransform(scale,0,0,scale,0,0);
+    oc.fillStyle=palette[4];oc.fillRect(0,0,W,innerHeight);
+    const top=Math.max(0,generated-Math.max(innerHeight*1.7,900));
+    const first=Math.max(0,Math.floor(top/segmentH)-1);
+    const last=Math.min(segments.length,first+Math.ceil(innerHeight/segmentH)+3);
+    // Render the same local window into the export.
+    const old=ctx; // drawSegment only needs a context-like global, so temporarily swap.
+    const saved=window.__ctxHack;
+    // Directly reproduce by using the visible canvas crop when possible.
+    // This preserves exactly what is on screen, including the current state.
+    oc.drawImage(canvas,0,0,canvas.width/DPR,canvas.height/DPR,0,0,W,innerHeight);
+    const a=document.createElement('a');
+    const number=String(Math.floor(generated/segmentH)).padStart(6,'0');
+    a.download='carpet_'+number+'.png';
+    a.href=out.toDataURL('image/png');
+    a.click();
+  }
+
+  addEventListener('keydown',e=>{
+    if(e.key.toLowerCase()==='e') exportMoment();
+  });
+  addEventListener('dblclick',exportMoment);
+
+  resize();
+  document.body.style.height=Math.max(innerHeight,generated+innerHeight*.8)+'px';
+  requestAnimationFrame(tick);
+})();
 </script>
 </body>
 </html>
