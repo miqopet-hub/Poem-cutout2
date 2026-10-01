@@ -5,25 +5,42 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Carpet Diem</title>
 <style>
-  :root{--paper:#e8e0d0;--ink:#17130f}
-  *{box-sizing:border-box}
-  html,body{margin:0;background:var(--paper);color:var(--ink);overflow-x:hidden}
-  body{font-family:Georgia,"Times New Roman",serif}
-  #loom{display:block;width:100%;image-rendering:auto}
-  #name{
-    position:fixed;z-index:5;top:16px;left:18px;
-    font-size:14px;letter-spacing:.02em;mix-blend-mode:multiply;
-    pointer-events:none
+  :root { --paper:#e7dfcf; --ink:#17130f; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; min-height:100%; background:var(--paper); color:var(--ink); overflow-x:hidden; }
+  body { font-family:Georgia,"Times New Roman",serif; }
+  #loom {
+    position:fixed;
+    inset:0;
+    width:100vw;
+    height:100vh;
+    display:block;
+    z-index:0;
   }
-  #hint{
-    position:fixed;z-index:5;right:18px;bottom:16px;
-    font:11px/1.2 system-ui,sans-serif;opacity:0;
-    transition:opacity .2s;pointer-events:none
+  #name {
+    position:fixed;
+    z-index:5;
+    top:16px;
+    left:18px;
+    font-size:14px;
+    letter-spacing:.02em;
+    mix-blend-mode:multiply;
+    pointer-events:none;
   }
-  body:hover #hint{opacity:.45}
-  @media(max-width:600px){
-    #name{top:12px;left:12px}
-    #hint{right:12px;bottom:12px}
+  #hint {
+    position:fixed;
+    z-index:5;
+    right:18px;
+    bottom:16px;
+    font:11px/1.2 system-ui,sans-serif;
+    opacity:0;
+    transition:opacity .2s;
+    pointer-events:none;
+  }
+  body:hover #hint { opacity:.42; }
+  @media(max-width:600px) {
+    #name { top:12px; left:12px; }
+    #hint { right:12px; bottom:12px; }
   }
 </style>
 </head>
@@ -35,240 +52,405 @@
 <script>
 (() => {
   const canvas = document.getElementById('loom');
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { alpha:false });
   const DPR = Math.min(devicePixelRatio || 1, 2);
 
-  // One refresh = one deterministic carpet.
-  const seed = (crypto.getRandomValues(new Uint32Array(1))[0]) >>> 0;
-  let rngState = seed;
+  // ------------------------------------------------------------
+  // ONE REFRESH = ONE CARPET
+  // The seed controls the whole woven history.
+  // ------------------------------------------------------------
+  const seed = crypto.getRandomValues(new Uint32Array(1))[0] >>> 0;
 
-  function rnd(){
-    rngState ^= rngState << 13; rngState ^= rngState >>> 17; rngState ^= rngState << 5;
-    return ((rngState >>> 0) / 4294967296);
+  function hash(n) {
+    n = (n ^ 61) ^ (n >>> 16);
+    n = Math.imul(n, 9);
+    n = n ^ (n >>> 4);
+    n = Math.imul(n, 0x27d4eb2d);
+    n = n ^ (n >>> 15);
+    return n >>> 0;
   }
-  function pick(a){ return a[Math.floor(rnd()*a.length)] }
+  function rand(n) { return hash((seed ^ n) >>> 0) / 4294967296; }
+  function choose(a,n) { return a[Math.floor(rand(n) * a.length)]; }
 
-  // A restrained palette based on traditional Armenian carpet colors,
-  // deliberately treated as a generative palette rather than a reconstruction.
+  // Restrained palettes inspired by Armenian carpet colour families.
   const palettes = [
-    ['#191510','#8d2024','#c58b35','#e0c47b','#f0e4c9'],
-    ['#201b16','#6f2925','#a9472e','#b98943','#ddd0ad'],
-    ['#161816','#315044','#a56c37','#c9aa67','#e8dfc9'],
-    ['#241b19','#713b45','#ad6f45','#d0a15e','#e7d7b6'],
-    ['#171817','#7c2524','#b85d36','#d6ad61','#eee2c8']
+    ['#2e2f54','#c93f43','#f0f1ca','#7b8768','#cdb878'],
+    ['#26284b','#b8443e','#eee7c6','#7b8467','#c8aa70'],
+    ['#343553','#c74743','#eceac8','#718067','#c59e66'],
+    ['#29263d','#a83d42','#e8dfc2','#75816b','#c7aa72']
   ];
-  const palette = pick(palettes);
 
   let W = innerWidth;
-  let unit = Math.max(14, Math.min(25, W / 38));
-  let segmentH = unit * 10;
-  let generated = 0;
-  let targetScroll = 0;
-  let userLookingBack = false;
-  let lastTime = performance.now();
-  let speed = unit * 1.25; // pixels / second
+  let H = innerHeight;
+  let unit = 18;
+  let sectionH = 760;
 
-  function resize(){
+  // Pixels of carpet woven since the beginning of this page load.
+  let woven = 0;
+
+  // How fast the carpet moves through the viewport.
+  // Deliberately visible, but not frantic.
+  const SPEED = 34; // px / second
+
+  // User can inspect the past. Once they reach the newest edge,
+  // automatic movement resumes.
+  let lookingBack = false;
+  let last = performance.now();
+
+  function resize() {
     W = innerWidth;
-    unit = Math.max(14, Math.min(25, W / 38));
-    segmentH = unit * 10;
+    H = innerHeight;
+    unit = Math.max(11, Math.min(21, W / 39));
+    sectionH = Math.max(620, Math.min(820, H * 1.05));
+
     canvas.width = Math.round(W * DPR);
-    canvas.height = Math.round(Math.max(innerHeight, 900) * DPR);
-    canvas.style.height = Math.max(innerHeight, 900) + 'px';
+    canvas.height = Math.round(H * DPR);
     ctx.setTransform(DPR,0,0,DPR,0,0);
-    draw();
+    render();
   }
   addEventListener('resize', resize);
 
-  // Store the woven history as compact segment seeds rather than pixels.
-  const segments = [];
-  function makeSegment(){
-    const s = {
-      seed: (rngState ^ Math.floor(generated / segmentH)) >>> 0,
-      motif: Math.floor(rnd()*7),
-      density: .72 + rnd()*.45,
-      flip: rnd() > .5,
-      accent: Math.floor(rnd()*palette.length)
-    };
-    segments.push(s);
-    return s;
+  // ------------------------------------------------------------
+  // GEOMETRY
+  // ------------------------------------------------------------
+  function fill(c) { ctx.fillStyle = c; }
+  function stroke(c,w) {
+    ctx.strokeStyle = c;
+    ctx.lineWidth = w;
+    ctx.lineJoin = 'miter';
+    ctx.lineCap = 'square';
   }
 
-  function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(x,y,w,h)}
-  function diamond(cx,cy,r,c,inner=true){
-    ctx.fillStyle=c;
+  function polygon(points, c) {
+    fill(c);
     ctx.beginPath();
-    ctx.moveTo(cx,cy-r);ctx.lineTo(cx+r,cy);ctx.lineTo(cx,cy+r);ctx.lineTo(cx-r,cy);ctx.closePath();ctx.fill();
-    if(inner){
-      ctx.strokeStyle=palette[0];ctx.lineWidth=Math.max(1,unit*.10);
-      ctx.beginPath();ctx.moveTo(cx,cy-r*.55);ctx.lineTo(cx+r*.55,cy);ctx.lineTo(cx,cy+r*.55);ctx.lineTo(cx-r*.55,cy);ctx.closePath();ctx.stroke();
+    ctx.moveTo(points[0][0],points[0][1]);
+    for(let i=1;i<points.length;i++) ctx.lineTo(points[i][0],points[i][1]);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function diamond(x,y,r,c,outline=null,ow=1) {
+    polygon([[x,y-r],[x+r,y],[x,y+r],[x-r,y]],c);
+    if(outline) {
+      stroke(outline,ow);
+      ctx.beginPath();
+      ctx.moveTo(x,y-r);ctx.lineTo(x+r,y);ctx.lineTo(x,y+r);ctx.lineTo(x-r,y);ctx.closePath();
+      ctx.stroke();
     }
   }
-  function octagon(cx,cy,r,c){
-    ctx.fillStyle=c;ctx.beginPath();
-    for(let i=0;i<8;i++){const a=Math.PI/8+i*Math.PI/4;const x=cx+Math.cos(a)*r,y=cy+Math.sin(a)*r;i?ctx.lineTo(x,y):ctx.moveTo(x,y)}
-    ctx.closePath();ctx.fill();
-    ctx.strokeStyle=palette[0];ctx.lineWidth=Math.max(1,unit*.10);ctx.stroke();
+
+  function octagon(x,y,r,c,outline=null,ow=1) {
+    const p=[];
+    for(let i=0;i<8;i++) {
+      const a=Math.PI/8+i*Math.PI/4;
+      p.push([x+Math.cos(a)*r,y+Math.sin(a)*r]);
+    }
+    polygon(p,c);
+    if(outline) {
+      stroke(outline,ow);
+      ctx.beginPath();
+      ctx.moveTo(p[0][0],p[0][1]);
+      for(let i=1;i<p.length;i++)ctx.lineTo(p[i][0],p[i][1]);
+      ctx.closePath();ctx.stroke();
+    }
   }
-  function cross(cx,cy,r,c){
-    ctx.fillStyle=c;
-    const t=r*.36;
-    ctx.fillRect(cx-t,cy-r,t*2,r*2);ctx.fillRect(cx-r,cy-t,r*2,t*2);
-    ctx.strokeStyle=palette[0];ctx.lineWidth=Math.max(1,unit*.10);
-    ctx.strokeRect(cx-t,cy-r,t*2,r*2);ctx.strokeRect(cx-r,cy-t,r*2,t*2);
-  }
-  function hook(cx,cy,r,c,flip){
-    ctx.strokeStyle=c;ctx.lineWidth=r*.28;ctx.lineCap='square';
+
+  function chevron(x,y,s,c,flip=1) {
+    stroke(c,Math.max(2,s*.16));
     ctx.beginPath();
-    const d=flip?-1:1;
-    ctx.moveTo(cx-r*.8,cy);
-    ctx.lineTo(cx-r*.15,cy);
-    ctx.lineTo(cx-r*.15+d*r*.55,cy-d*r*.55);
-    ctx.lineTo(cx+d*r*.72,cy-d*r*.55);
+    ctx.moveTo(x-s*.9,y);
+    ctx.lineTo(x-s*.15,y);
+    ctx.lineTo(x+s*.5,y-flip*s*.58);
+    ctx.lineTo(x+s*.9,y-flip*s*.58);
     ctx.stroke();
   }
 
-  function motif(x,y,type,scale,c,flip){
-    const r=scale;
-    if(type===0) diamond(x,y,r,c);
-    if(type===1) octagon(x,y,r,c);
-    if(type===2) cross(x,y,r,c);
-    if(type===3){
-      diamond(x,y,r,c,false);
-      diamond(x,y,r*.48,palette[(palette.indexOf(c)+2)%palette.length],false);
-      ctx.strokeStyle=palette[0];ctx.lineWidth=Math.max(1,unit*.10);
-      ctx.strokeRect(x-r*.5,y-r*.5,r,r);
-    }
-    if(type===4){
-      octagon(x,y,r,c);
-      for(let i=0;i<4;i++) hook(x+(i%2?1:-1)*r*.75,y+(i<2?-1:1)*r*.72,r*.55,palette[(palette.indexOf(c)+1)%palette.length],i%2);
-    }
-    if(type===5){
-      ctx.strokeStyle=c;ctx.lineWidth=r*.22;
+  function branch(x,y,s,c,flip=1) {
+    stroke(c,Math.max(2,s*.14));
+    ctx.beginPath();
+    ctx.moveTo(x,y+s*.75);
+    ctx.lineTo(x,y-s*.05);
+    ctx.lineTo(x+s*.55,y-s*.55*flip);
+    ctx.moveTo(x,y+s*.25);
+    ctx.lineTo(x-s*.55,y-s*.35*flip);
+    ctx.moveTo(x,y-s*.05);
+    ctx.lineTo(x+s*.35,y-s*.72*flip);
+    ctx.stroke();
+  }
+
+  function hookedDiamond(x,y,s,c,flip=1) {
+    stroke(c,Math.max(2,s*.12));
+    ctx.beginPath();
+    ctx.moveTo(x,y-s);
+    ctx.lineTo(x+s*.78,y);
+    ctx.lineTo(x+s*.38,y+s*.42*flip);
+    ctx.lineTo(x+s*.05,y+s*.42*flip);
+    ctx.moveTo(x+s*.78,y);
+    ctx.lineTo(x+s*.42,y-s*.42*flip);
+    ctx.lineTo(x+s*.05,y-s*.42*flip);
+    ctx.stroke();
+  }
+
+  // ------------------------------------------------------------
+  // SYMMETRIC CARPET MODULES
+  //
+  // We draw only the TOP-RIGHT quarter of the central ornament.
+  // The same geometry is mirrored horizontally, vertically, and
+  // both. This is the basic system we can feed with your future
+  // carpet references.
+  // ------------------------------------------------------------
+  function mirrorQuarter(drawQuarter, cx, cy) {
+    ctx.save();
+    drawQuarter(1,1);
+    ctx.scale(-1,1); ctx.translate(-2*cx,0); drawQuarter(-1,1);
+    ctx.restore();
+
+    ctx.save();
+    ctx.scale(1,-1); ctx.translate(0,-2*cy); drawQuarter(1,-1);
+    ctx.scale(-1,1); ctx.translate(-2*cx,0); drawQuarter(-1,-1);
+    ctx.restore();
+  }
+
+  function centralModule(sectionIndex, y0, pal) {
+    const cx=W/2;
+    const cy=y0 + sectionH*.52;
+    const usable=Math.min(W*.64, sectionH*.62);
+    const r=usable*.50;
+
+    const variant=Math.floor(rand(sectionIndex*17+3)*5);
+    const main=pal[1], light=pal[2], green=pal[3], gold=pal[4], dark=pal[0];
+
+    // Large central field.
+    fill(main);
+    ctx.fillRect(cx-r*.92,cy-r*.72,r*1.84,r*1.44);
+
+    // Cream outline / stepped outer body.
+    const step=r*.16;
+    stroke(light,Math.max(3,unit*.38));
+    ctx.beginPath();
+    ctx.moveTo(cx-r*.92,cy-r*.72);
+    ctx.lineTo(cx-r*.58,cy-r*.72);
+    ctx.lineTo(cx-r*.42,cy-r*.90);
+    ctx.lineTo(cx+r*.42,cy-r*.90);
+    ctx.lineTo(cx+r*.58,cy-r*.72);
+    ctx.lineTo(cx+r*.92,cy-r*.72);
+    ctx.moveTo(cx-r*.92,cy+r*.72);
+    ctx.lineTo(cx-r*.58,cy+r*.72);
+    ctx.lineTo(cx-r*.42,cy+r*.90);
+    ctx.lineTo(cx+r*.42,cy+r*.90);
+    ctx.lineTo(cx+r*.58,cy+r*.72);
+    ctx.lineTo(cx+r*.92,cy+r*.72);
+    ctx.stroke();
+
+    // Central square.
+    const cs=r*.33;
+    fill(green);
+    ctx.fillRect(cx-cs,cy-cs,cs*2,cs*2);
+    stroke(light,Math.max(3,unit*.32));
+    ctx.strokeRect(cx-cs,cy-cs,cs*2,cs*2);
+    diamond(cx,cy,cs*.52,'#a77b67');
+
+    // Fourfold ornamental arms, generated once and mirrored.
+    mirrorQuarter((sx,sy)=>{
+      const qx=cx+sx*r*.12;
+      const qy=cy+sy*r*.08;
+      const arm=r*.46;
+      const turn=r*.20;
+
+      stroke(light,Math.max(3,unit*.32));
       ctx.beginPath();
-      for(let i=0;i<5;i++){const a=(i/4)*Math.PI*2-Math.PI/2;const px=x+Math.cos(a)*r*.8,py=y+Math.sin(a)*r*.8;i?ctx.lineTo(px,py):ctx.moveTo(px,py)}
+      ctx.moveTo(cx+sx*r*.17,cy+sy*r*.03);
+      ctx.lineTo(cx+sx*r*.17,cy-sy*r*.25);
+      ctx.lineTo(cx+sx*r*.39,cy-sy*r*.43);
+      ctx.lineTo(cx+sx*r*.58,cy-sy*r*.25);
+      ctx.lineTo(cx+sx*r*.46,cy-sy*r*.10);
+      ctx.lineTo(cx+sx*r*.34,cy-sy*r*.10);
       ctx.stroke();
-      diamond(x,y,r*.28,palette[2],false);
-    }
-    if(type===6){
-      diamond(x,y,r,c);
-      for(let i=0;i<4;i++){
-        const a=i*Math.PI/2+(flip?Math.PI/4:0);
-        hook(x+Math.cos(a)*r*.95,y+Math.sin(a)*r*.95,r*.42,palette[(palette.indexOf(c)+3)%palette.length],i%2);
+
+      if(variant===0) {
+        hookedDiamond(qx+sx*r*.37,qy-sy*r*.48,turn,light,sy);
+      } else if(variant===1) {
+        chevron(qx+sx*r*.37,qy-sy*r*.42,turn,light,sy);
+      } else if(variant===2) {
+        branch(qx+sx*r*.38,qy-sy*r*.42,turn,light,sy);
+      } else if(variant===3) {
+        diamond(qx+sx*r*.40,qy-sy*r*.42,turn*.62,gold,dark,Math.max(1,unit*.08));
+      } else {
+        octagon(qx+sx*r*.40,qy-sy*r*.42,turn*.62,gold,dark,Math.max(1,unit*.08));
+      }
+    },cx,cy);
+
+    // Four secondary diamonds, also fourfold symmetric.
+    const sideR=r*.13;
+    diamond(cx-r*.67,cy,sideR,green,main,Math.max(1,unit*.08));
+    diamond(cx+r*.67,cy,sideR,green,main,Math.max(1,unit*.08));
+    diamond(cx,cy-r*.67,sideR,gold,main,Math.max(1,unit*.08));
+    diamond(cx,cy+r*.67,sideR,gold,main,Math.max(1,unit*.08));
+
+    // Outer four corner diamonds.
+    const cd=r*.17;
+    diamond(cx-r*.72,cy-r*.82,cd,green,main,Math.max(1,unit*.08));
+    diamond(cx+r*.72,cy-r*.82,cd,green,main,Math.max(1,unit*.08));
+    diamond(cx-r*.72,cy+r*.82,cd,green,main,Math.max(1,unit*.08));
+    diamond(cx+r*.72,cy+r*.82,cd,green,main,Math.max(1,unit*.08));
+  }
+
+  function border(sectionIndex, pal) {
+    const dark=pal[0], red=pal[1], light=pal[2], green=pal[3], gold=pal[4];
+    const bw=Math.max(28,W*.095);
+    const x=bw*.28;
+    const right=W-x;
+
+    fill(dark);
+    ctx.fillRect(0,0,bw, H);
+    ctx.fillRect(W-bw,0,bw,H);
+
+    // Main cream border stripe.
+    fill(light);
+    ctx.fillRect(bw*.20,0,bw*.19,H);
+    ctx.fillRect(W-bw*.39,0,bw*.19,H);
+
+    // Repeating border units. Symmetric left/right.
+    const bh=Math.max(74,unit*5.3);
+    const phase=Math.floor(scrollY/bh);
+    for(let yy=-bh;yy<H+bh;yy+=bh) {
+      const i=phase+Math.floor((yy+scrollY)/bh);
+      const v=Math.floor(rand(sectionIndex*101+i*13)*4);
+
+      // red triangular teeth
+      fill(red);
+      ctx.beginPath();
+      ctx.moveTo(bw*.40,yy);
+      ctx.lineTo(bw*.92,yy+bh*.5);
+      ctx.lineTo(bw*.40,yy+bh);
+      ctx.closePath();ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(W-bw*.40,yy);
+      ctx.lineTo(W-bw*.92,yy+bh*.5);
+      ctx.lineTo(W-bw*.40,yy+bh);
+      ctx.closePath();ctx.fill();
+
+      if(v%2===0) {
+        branch(bw*.62,yy+bh*.5,bh*.26,green,1);
+        branch(W-bw*.62,yy+bh*.5,bh*.26,green,-1);
+      } else {
+        diamond(bw*.63,yy+bh*.5,bh*.18,gold,red,1);
+        diamond(W-bw*.63,yy+bh*.5,bh*.18,gold,red,1);
       }
     }
-  }
 
-  function drawSegment(s, y){
-    const cols = Math.max(5,Math.floor(W/(unit*3.2)));
-    const cell = W/cols;
-    // Small edge guard, like the outer border of a woven carpet.
-    rect(0,y,W,segmentH,palette[0]);
-
-    const innerX = unit*1.25;
-    const innerY = unit*1.0;
-    rect(innerX,y+innerY,W-innerX*2,segmentH-innerY*2,palette[4]);
-
-    // Border bands.
-    const bw=unit*.72;
-    rect(innerX,y+innerY,W-innerX*2,bw,palette[2]);
-    rect(innerX,y+segmentH-innerY-bw,W-innerX*2,bw,palette[2]);
-    rect(innerX,y+innerY,bw,segmentH-innerY*2,palette[2]);
-    rect(W-innerX-bw,y+innerY,bw,segmentH-innerY*2,palette[2]);
-
-    // Interlocking border diamonds.
-    const bx=innerX+bw*.5;
-    const by=y+innerY+bw*.5;
-    for(let x=bx;x<W-innerX;x+=unit*2.0) diamond(x,by,unit*.48,palette[1],false);
-    for(let x=bx;x<W-innerX;x+=unit*2.0) diamond(x,y+segmentH-innerY-bw*.5,unit*.48,palette[1],false);
-    for(let yy=by+unit*2;yy<y+segmentH-innerY-bw;yy+=unit*2) diamond(bx,yy,unit*.48,palette[1],false);
-    for(let yy=by+unit*2;yy<y+segmentH-innerY-bw;yy+=unit*2) diamond(W-innerX-bw*.5,yy,unit*.48,palette[1],false);
-
-    const startX=innerX+bw+cell*.5;
-    const startY=y+innerY+bw+cell*.28;
-    const rows=Math.max(1,Math.floor((segmentH-innerY*2-bw*2)/(unit*2.8)));
-    for(let row=0;row<rows;row++){
-      const yy=startY+row*unit*2.8;
-      for(let col=0;col<cols-2;col++){
-        const xx=startX+col*cell;
-        const wave = Math.sin((col+row)*.85 + generated*.002);
-        if(Math.abs(wave)>.98 && rnd()<.4) continue;
-        const localType=(s.motif+row+col+(s.flip?col:0))%7;
-        const cc=palette[1+((col+row+s.accent)%4)];
-        const sc=unit*(.75 + .22*s.density);
-        motif(xx,yy+Math.sin(col*.8+row)*unit*.18,localType,sc,cc,(col+row)%2===0);
-      }
+    // Tiny cream/red edge checks.
+    const check=unit*.62;
+    for(let yy=(-scrollY% (check*2))-check; yy<H+check; yy+=check*2) {
+      fill(light);
+      ctx.fillRect(bw*.02,yy,check,check);
+      ctx.fillRect(W-bw*.02-check,yy,check,check);
     }
   }
 
-  function ensureHistory(){
-    const need = Math.ceil((innerHeight*1.7 + generated + 1000)/segmentH);
-    while(segments.length < need) makeSegment();
+  function sectionPalette(i) {
+    return choose(palettes,i*97+11);
   }
 
-  function draw(){
-    ensureHistory();
-    // The canvas is a moving window over the woven history.
-    const top = Math.max(0, generated - Math.max(innerHeight*1.7,900));
-    ctx.clearRect(0,0,W,Math.max(innerHeight,900));
-    const first=Math.max(0,Math.floor(top/segmentH)-1);
-    const last=Math.min(segments.length,first+Math.ceil(Math.max(innerHeight,900)/segmentH)+3);
-    for(let i=first;i<last;i++){
-      const y=i*segmentH-top;
-      if(y<Math.max(innerHeight,900)+segmentH && y>-segmentH) drawSegment(segments[i],y);
+  // ------------------------------------------------------------
+  // RENDERING THE ACTUAL VIEWPORT
+  //
+  // worldY = where the top of the viewport sits on the woven carpet.
+  // Since worldY is tied to scrollY, going upward shows exactly the
+  // material that has already been woven.
+  // ------------------------------------------------------------
+  function render() {
+    const worldY=scrollY;
+    fill('#e7dfcf');
+    ctx.fillRect(0,0,W,H);
+
+    const first=Math.floor(worldY/sectionH)-1;
+    const last=Math.ceil((worldY+H)/sectionH)+1;
+
+    for(let i=first;i<=last;i++) {
+      if(i<0) continue;
+      const y=i*sectionH-worldY;
+      const pal=sectionPalette(i);
+      fill(pal[0]);
+      ctx.fillRect(0,y,W,sectionH);
+
+      // A very slight overlap keeps sections visually connected.
+      centralModule(i,y,pal);
     }
+
+    border(Math.floor(worldY/sectionH),sectionPalette(Math.floor(worldY/sectionH)));
   }
 
-  function follow(){
-    // Keep the viewer at the newest woven edge unless they have deliberately
-    // moved into the already-woven history.
-    const max=Math.max(0,document.documentElement.scrollHeight-innerHeight);
-    if(!userLookingBack) scrollTo(0,max);
-  }
+  // ------------------------------------------------------------
+  // THE ACTUAL INFINITE MOTION
+  // ------------------------------------------------------------
+  function tick(now) {
+    const dt=Math.min(.05,(now-last)/1000);
+    last=now;
 
-  function tick(now){
-    const dt=Math.min(.05,(now-lastTime)/1000); lastTime=now;
-    generated += speed*dt;
-    draw();
-    // Rebuild the document height so the browser has a real history to scroll through.
-    document.body.style.height=Math.max(innerHeight,generated+innerHeight*0.8)+'px';
-    follow();
+    // The carpet continues to be woven whether or not the viewer looks back.
+    woven += SPEED*dt;
+
+    // Real document length. The newest edge is always just ahead of us.
+    const pageHeight=Math.max(H+1,woven+H);
+    document.body.style.height=pageHeight+'px';
+
+    if(!lookingBack) {
+      // Follow the newest edge exactly. No easing, no jumping.
+      const max=Math.max(0,pageHeight-H);
+      if(scrollY < max-1) scrollTo(0,max);
+    }
+
+    render();
     requestAnimationFrame(tick);
   }
 
-  // Manual scrolling is intentionally limited to the already-woven past.
+  // Only upward inspection is allowed.
   addEventListener('wheel',e=>{
-    if(e.deltaY<0){ userLookingBack=true; }
-    else if(e.deltaY>0){
-      const atBottom=scrollY >= document.documentElement.scrollHeight-innerHeight-3;
-      if(atBottom){e.preventDefault();userLookingBack=false}
+    const max=Math.max(0,document.documentElement.scrollHeight-H);
+    if(e.deltaY<0) {
+      lookingBack=true;
+    } else if(e.deltaY>0 && scrollY>=max-2) {
+      e.preventDefault();
+      lookingBack=false;
     }
   },{passive:false});
 
   addEventListener('scroll',()=>{
-    const max=Math.max(0,document.documentElement.scrollHeight-innerHeight);
-    if(scrollY < max-30) userLookingBack=true;
-    else userLookingBack=false;
-  });
+    const max=Math.max(0,document.documentElement.scrollHeight-H);
+    if(scrollY>=max-3) lookingBack=false;
+    else lookingBack=true;
+    render();
+  },{passive:true});
 
-  // Export the exact visible moment as a clean carpet image.
-  function exportMoment(){
-    const out=document.createElement('canvas');
+  // Touch: upward = inspect the past; downward stops at the newest edge.
+  let touchY=0;
+  addEventListener('touchstart',e=>{touchY=e.touches[0].clientY},{passive:true});
+  addEventListener('touchmove',e=>{
+    const dy=e.touches[0].clientY-touchY;
+    if(dy>0) lookingBack=true;
+    touchY=e.touches[0].clientY;
+  },{passive:true});
+
+  // ------------------------------------------------------------
+  // EXPORT: exactly the current viewport.
+  // ------------------------------------------------------------
+  function exportMoment() {
     const scale=Math.min(2,Math.max(1,devicePixelRatio||1));
-    out.width=Math.round(W*scale);out.height=Math.round(innerHeight*scale);
-    const oc=out.getContext('2d'); oc.setTransform(scale,0,0,scale,0,0);
-    oc.fillStyle=palette[4];oc.fillRect(0,0,W,innerHeight);
-    const top=Math.max(0,generated-Math.max(innerHeight*1.7,900));
-    const first=Math.max(0,Math.floor(top/segmentH)-1);
-    const last=Math.min(segments.length,first+Math.ceil(innerHeight/segmentH)+3);
-    // Render the same local window into the export.
-    const old=ctx; // drawSegment only needs a context-like global, so temporarily swap.
-    const saved=window.__ctxHack;
-    // Directly reproduce by using the visible canvas crop when possible.
-    // This preserves exactly what is on screen, including the current state.
-    oc.drawImage(canvas,0,0,canvas.width/DPR,canvas.height/DPR,0,0,W,innerHeight);
+    const out=document.createElement('canvas');
+    out.width=Math.round(W*scale);
+    out.height=Math.round(H*scale);
+    const oc=out.getContext('2d');
+
+    // Render through a temporary context by copying the current screen.
+    oc.drawImage(canvas,0,0,out.width,out.height);
+
+    const section=Math.floor(scrollY/sectionH);
+    const number=String(Math.max(0,section)).padStart(5,'0');
+
     const a=document.createElement('a');
-    const number=String(Math.floor(generated/segmentH)).padStart(6,'0');
     a.download='carpet_'+number+'.png';
     a.href=out.toDataURL('image/png');
     a.click();
@@ -280,7 +462,6 @@
   addEventListener('dblclick',exportMoment);
 
   resize();
-  document.body.style.height=Math.max(innerHeight,generated+innerHeight*.8)+'px';
   requestAnimationFrame(tick);
 })();
 </script>
