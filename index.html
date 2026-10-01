@@ -212,113 +212,184 @@
     ctx.restore();
   }
 
+  // ------------------------------------------------------------
+  // MORPHING CARPET MODULE
+  //
+  // This is deliberately NOT a crossfade.
+  // Shapes share the same six-point skeleton:
+  //
+  // triangle -> hexagon -> square
+  //
+  // The triangle and square are represented using six points, with
+  // some points initially sitting on the same edge. They can therefore
+  // physically move into the intermediate hexagon and then into the
+  // square. The ornament itself changes shape rather than disappearing
+  // and being replaced by another drawing.
+  // ------------------------------------------------------------
+  function morphPoint(a,b,t) {
+    return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t];
+  }
+
+  function smooth(t) {
+    return t*t*(3-2*t);
+  }
+
+  function morphPolygon(cx,cy,r,from,to,t,fillColor,outlineColor,ow) {
+    const p=[];
+    for(let i=0;i<6;i++) p.push(morphPoint(from[i],to[i],t));
+    const scaled=p.map(q=>[cx+q[0]*r,cy+q[1]*r]);
+    polygon(scaled,fillColor);
+    if(outlineColor) {
+      stroke(outlineColor,ow);
+      ctx.beginPath();
+      ctx.moveTo(scaled[0][0],scaled[0][1]);
+      for(let i=1;i<scaled.length;i++) ctx.lineTo(scaled[i][0],scaled[i][1]);
+      ctx.closePath();
+      ctx.stroke();
+    }
+  }
+
+  // All shapes have six control points. Duplicate/collinear points
+  // allow the silhouette to become a genuine intermediate hexagon.
+  const SHAPES = {
+    triangle: [
+      [0,-1], [0,-1], [.90,.50], [0,.50], [-.90,.50], [0,-1]
+    ],
+    hexagon: [
+      [0,-1], [.86,-.50], [.86,.50], [0,1], [-.86,.50], [-.86,-.50]
+    ],
+    square: [
+      [-.78,-.78], [.78,-.78], [.78,.78], [.78,.78], [-.78,.78], [-.78,.78]
+    ],
+    diamond: [
+      [0,-1], [.72,0], [0,1], [0,1], [-.72,0], [0,-1]
+    ]
+  };
+
+  function drawMorphMotif(x,y,r,fromName,toName,t,fillColor,outlineColor) {
+    const a=SHAPES[fromName], b=SHAPES[toName];
+    morphPolygon(x,y,r,a,b,smooth(t),fillColor,outlineColor,Math.max(1,unit*.09));
+  }
+
+  function morphShapeState(x,y,r,phase,pal) {
+    // One complete transformation cycle:
+    // triangle -> hexagon -> square -> diamond -> triangle.
+    const states=[
+      ['triangle','hexagon'],
+      ['hexagon','square'],
+      ['square','diamond'],
+      ['diamond','triangle']
+    ];
+    const total=states.length;
+    const q=((phase%1)+1)%1*total;
+    const i=Math.floor(q)%total;
+    const t=q-Math.floor(q);
+    const pair=states[i];
+
+    drawMorphMotif(x,y,r,pair[0],pair[1],t,pal[4],pal[0]);
+  }
+
   function centralModule(sectionIndex, y0, pal) {
     const cx=W/2;
     const cy=y0 + sectionH*.52;
-    const usable=Math.min(W*.64, sectionH*.62);
-    const r=usable*.50;
-
-    const variant=Math.floor(rand(sectionIndex*17+3)*5);
+    const r=Math.min(W*.64,sectionH*.62)*.50;
     const main=pal[1], light=pal[2], green=pal[3], gold=pal[4], dark=pal[0];
 
-    // Large central field.
+    // World position controls the morph, so looking backward shows the
+    // exact historical state rather than the current state.
+    const worldCenter=sectionIndex*sectionH + sectionH*.52;
+    const phase=worldCenter/1050;
+
+    // Main field.
     fill(main);
     ctx.fillRect(cx-r*.92,cy-r*.72,r*1.84,r*1.44);
 
-    // Cream outline / stepped outer body.
-    const step=r*.16;
+    // Exact four-way stepped body.
     stroke(light,Math.max(3,unit*.38));
     ctx.beginPath();
-    ctx.moveTo(cx-r*.92,cy-r*.72);
-    ctx.lineTo(cx-r*.58,cy-r*.72);
-    ctx.lineTo(cx-r*.42,cy-r*.90);
-    ctx.lineTo(cx+r*.42,cy-r*.90);
-    ctx.lineTo(cx+r*.58,cy-r*.72);
-    ctx.lineTo(cx+r*.92,cy-r*.72);
-    ctx.moveTo(cx-r*.92,cy+r*.72);
-    ctx.lineTo(cx-r*.58,cy+r*.72);
-    ctx.lineTo(cx-r*.42,cy+r*.90);
-    ctx.lineTo(cx+r*.42,cy+r*.90);
-    ctx.lineTo(cx+r*.58,cy+r*.72);
-    ctx.lineTo(cx+r*.92,cy+r*.72);
-    ctx.stroke();
+    const outline=[
+      [-.92,-.72],[-.58,-.72],[-.42,-.90],[.42,-.90],[.58,-.72],[.92,-.72],
+      [.92,.72],[.58,.72],[.42,.90],[-.42,.90],[-.58,.72],[-.92,.72]
+    ];
+    outline.forEach((p,i)=>{
+      const x=cx+p[0]*r,y=cy+p[1]*r;
+      if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);
+    });
+    ctx.closePath();ctx.stroke();
 
-    // Central square.
+    // Center square slowly morphs too.
     const cs=r*.33;
-    fill(green);
-    ctx.fillRect(cx-cs,cy-cs,cs*2,cs*2);
-    stroke(light,Math.max(3,unit*.32));
-    ctx.strokeRect(cx-cs,cy-cs,cs*2,cs*2);
-    diamond(cx,cy,cs*.52,'#a77b67');
+    const centerPhase=phase*.82+.17;
+    morphShapeState(cx,cy,cs,centerPhase,[dark,main,light,green,gold]);
 
-    // Fourfold ornamental arms, generated once and mirrored.
+    // Fourfold arms. Only ONE quarter is authored.
     mirrorQuarter((sx,sy)=>{
-      const qx=cx+sx*r*.12;
-      const qy=cy+sy*r*.08;
-      const arm=r*.46;
-      const turn=r*.20;
+      const armPhase=phase*.67 + .13;
+      const qx=cx+sx*r*.40;
+      const qy=cy-sy*r*.39;
 
-      stroke(light,Math.max(3,unit*.32));
+      stroke(light,Math.max(3,unit*.31));
       ctx.beginPath();
       ctx.moveTo(cx+sx*r*.17,cy+sy*r*.03);
       ctx.lineTo(cx+sx*r*.17,cy-sy*r*.25);
       ctx.lineTo(cx+sx*r*.39,cy-sy*r*.43);
       ctx.lineTo(cx+sx*r*.58,cy-sy*r*.25);
-      ctx.lineTo(cx+sx*r*.46,cy-sy*r*.10);
-      ctx.lineTo(cx+sx*r*.34,cy-sy*r*.10);
       ctx.stroke();
 
-      if(variant===0) {
-        hookedDiamond(qx+sx*r*.37,qy-sy*r*.48,turn,light,sy);
-      } else if(variant===1) {
-        chevron(qx+sx*r*.37,qy-sy*r*.42,turn,light,sy);
-      } else if(variant===2) {
-        branch(qx+sx*r*.38,qy-sy*r*.42,turn,light,sy);
-      } else if(variant===3) {
-        diamond(qx+sx*r*.40,qy-sy*r*.42,turn*.62,gold,dark,Math.max(1,unit*.08));
-      } else {
-        octagon(qx+sx*r*.40,qy-sy*r*.42,turn*.62,gold,dark,Math.max(1,unit*.08));
-      }
+      // The terminal shape physically changes.
+      morphShapeState(qx,qy,r*.19,armPhase,[dark,main,light,green,gold]);
+
+      // A small inner hook grows/shrinks rather than switching.
+      const hookPhase=(Math.sin(phase*Math.PI*2)+1)/2;
+      stroke(light,Math.max(2,unit*.20));
+      ctx.beginPath();
+      ctx.moveTo(cx+sx*r*.34,cy-sy*r*.10);
+      ctx.lineTo(cx+sx*r*(.34+.12*hookPhase),cy-sy*r*(.10+.10*hookPhase));
+      ctx.stroke();
     },cx,cy);
 
-    // Four secondary diamonds, also fourfold symmetric.
+    // Secondary motifs also morph continuously.
     const sideR=r*.13;
-    diamond(cx-r*.67,cy,sideR,green,main,Math.max(1,unit*.08));
-    diamond(cx+r*.67,cy,sideR,green,main,Math.max(1,unit*.08));
-    diamond(cx,cy-r*.67,sideR,gold,main,Math.max(1,unit*.08));
-    diamond(cx,cy+r*.67,sideR,gold,main,Math.max(1,unit*.08));
+    morphShapeState(cx-r*.67,cy,sideR,phase*.91,[dark,main,light,green,gold]);
+    morphShapeState(cx+r*.67,cy,sideR,phase*.91,[dark,main,light,green,gold]);
+    morphShapeState(cx,cy-r*.67,sideR,phase*.91+.25,[dark,main,light,green,gold]);
+    morphShapeState(cx,cy+r*.67,sideR,phase*.91+.25,[dark,main,light,green,gold]);
 
-    // Outer four corner diamonds.
     const cd=r*.17;
-    diamond(cx-r*.72,cy-r*.82,cd,green,main,Math.max(1,unit*.08));
-    diamond(cx+r*.72,cy-r*.82,cd,green,main,Math.max(1,unit*.08));
-    diamond(cx-r*.72,cy+r*.82,cd,green,main,Math.max(1,unit*.08));
-    diamond(cx+r*.72,cy+r*.82,cd,green,main,Math.max(1,unit*.08));
+    morphShapeState(cx-r*.72,cy-r*.82,cd,phase*.73+.10,[dark,main,light,green,gold]);
+    morphShapeState(cx+r*.72,cy-r*.82,cd,phase*.73+.10,[dark,main,light,green,gold]);
+    morphShapeState(cx-r*.72,cy+r*.82,cd,phase*.73+.10,[dark,main,light,green,gold]);
+    morphShapeState(cx+r*.72,cy+r*.82,cd,phase*.73+.10,[dark,main,light,green,gold]);
   }
+
 
   function border(sectionIndex, pal) {
     const dark=pal[0], red=pal[1], light=pal[2], green=pal[3], gold=pal[4];
     const bw=Math.max(28,W*.095);
-    const x=bw*.28;
-    const right=W-x;
 
     fill(dark);
-    ctx.fillRect(0,0,bw, H);
+    ctx.fillRect(0,0,bw,H);
     ctx.fillRect(W-bw,0,bw,H);
 
-    // Main cream border stripe.
     fill(light);
     ctx.fillRect(bw*.20,0,bw*.19,H);
     ctx.fillRect(W-bw*.39,0,bw*.19,H);
 
-    // Repeating border units. Symmetric left/right.
+    // Border motifs are part of the same moving carpet coordinate.
+    // Their shapes morph in place while the whole border travels.
     const bh=Math.max(74,unit*5.3);
-    const phase=Math.floor(scrollY/bh);
-    for(let yy=-bh;yy<H+bh;yy+=bh) {
-      const i=phase+Math.floor((yy+scrollY)/bh);
-      const v=Math.floor(rand(sectionIndex*101+i*13)*4);
+    const worldTop=scrollY;
+    const first=Math.floor(worldTop/bh)-2;
+    const last=Math.ceil((worldTop+H)/bh)+2;
 
-      // red triangular teeth
+    for(let n=first;n<=last;n++) {
+      const worldY=n*bh;
+      const yy=worldY-worldTop;
+      if(yy<-bh||yy>H+bh)continue;
+
+      const phase=worldY/920;
+
+      // Mirrored red field / teeth.
       fill(red);
       ctx.beginPath();
       ctx.moveTo(bw*.40,yy);
@@ -332,23 +403,24 @@
       ctx.lineTo(W-bw*.40,yy+bh);
       ctx.closePath();ctx.fill();
 
-      if(v%2===0) {
-        branch(bw*.62,yy+bh*.5,bh*.26,green,1);
-        branch(W-bw*.62,yy+bh*.5,bh*.26,green,-1);
-      } else {
-        diamond(bw*.63,yy+bh*.5,bh*.18,gold,red,1);
-        diamond(W-bw*.63,yy+bh*.5,bh*.18,gold,red,1);
-      }
-    }
+      // These used to be static black/white dashes.
+      // They now physically transform: diamond -> hexagon -> square.
+      morphShapeState(bw*.63,yy+bh*.5,bh*.18,phase,[dark,red,light,green,gold]);
+      morphShapeState(W-bw*.63,yy+bh*.5,bh*.18,phase,[dark,red,light,green,gold]);
 
-    // Tiny cream/red edge checks.
-    const check=unit*.62;
-    for(let yy=(-scrollY% (check*2))-check; yy<H+check; yy+=check*2) {
+      // Cream checks also morph gradually by changing their width and height.
+      const check=unit*.62;
+      const checkPhase=(Math.sin(phase*Math.PI*2)+1)/2;
+      const cw=check*(.45+.55*checkPhase);
+      const ch=check*(1.15-.30*checkPhase);
       fill(light);
-      ctx.fillRect(bw*.02,yy,check,check);
-      ctx.fillRect(W-bw*.02-check,yy,check,check);
+      ctx.fillRect(bw*.02,yy+bh*.08,cw,ch);
+      ctx.fillRect(W-bw*.02-cw,yy+bh*.08,cw,ch);
+      ctx.fillRect(bw*.02,yy+bh*.82-cw,ch,cw);
+      ctx.fillRect(W-bw*.02-ch,yy+bh*.82-cw,ch,cw);
     }
   }
+
 
   function sectionPalette(i) {
     return choose(palettes,i*97+11);
